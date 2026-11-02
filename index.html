@@ -457,7 +457,13 @@
       display: block;
     }
 
+.mini-readouts {
+      contain: layout style;
+    }
+
     .mini-metric .num {
+      display: inline-block;
+      min-width: 4ch;
       font-size: 1.4rem;
       font-weight: 900;
       font-variant-numeric: tabular-nums;
@@ -3635,22 +3641,21 @@
 
         if (AppState.isDrawerCollapsed) return;
 
-        if (AppState.detectedFreq !== null) {
-          this.els.readoutNote.textContent = AppState.detectedNoteName;
-          this.els.readoutNote.style.color = AppState.isNoteMatching ? "var(--pass-green)" : "var(--text-main)";
-          this.els.readoutHz.textContent = `${AppState.detectedFreq.toFixed(1)} Hz`;
+        // Cached string guards to prevent 60fps DOM recalculation
+        const noteStr = AppState.detectedFreq !== null ? AppState.detectedNoteName : "--";
+        const hzStr = AppState.detectedFreq !== null ? `${AppState.detectedFreq.toFixed(1)} Hz` : "-- Hz";
+        const activeOffset = AppState.isNoteMatching ? AppState.targetCentsOff : AppState.detectedCents;
+        const sign = activeOffset > 0 ? "+" : "";
+        const centsStr = AppState.detectedFreq !== null ? `${sign}${activeOffset} ¢` : "-- ¢";
+        const volStr = `${AppState.currentVolume} / 100`;
 
-          const activeOffset = AppState.isNoteMatching ? AppState.targetCentsOff : AppState.detectedCents;
-          const sign = activeOffset > 0 ? "+" : "";
-          this.els.readoutCents.textContent = `${sign}${activeOffset} ¢`;
-        } else {
-          this.els.readoutNote.textContent = "--";
-          this.els.readoutNote.style.color = "var(--text-muted)";
-          this.els.readoutHz.textContent = "-- Hz";
-          this.els.readoutCents.textContent = "-- ¢";
+        if (this.els.readoutNote.textContent !== noteStr) {
+          this.els.readoutNote.textContent = noteStr;
+          this.els.readoutNote.style.color = AppState.isNoteMatching ? "var(--pass-green)" : (AppState.detectedFreq !== null ? "var(--text-main)" : "var(--text-muted)");
         }
-
-        this.els.readoutVol.textContent = `${AppState.currentVolume} / 100`;
+        if (this.els.readoutHz.textContent !== hzStr) this.els.readoutHz.textContent = hzStr;
+        if (this.els.readoutCents.textContent !== centsStr) this.els.readoutCents.textContent = centsStr;
+        if (this.els.readoutVol.textContent !== volStr) this.els.readoutVol.textContent = volStr;
 
         if (AppState.isGateOpen) {
           this.els.statusBeacon.classList.add("triggered");
