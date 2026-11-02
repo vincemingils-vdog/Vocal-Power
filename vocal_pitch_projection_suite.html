@@ -1,0 +1,3550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vocal Pitch & Projection Suite - Classroom Audio Engine</title>
+  <style>
+    :root {
+      --bg-dark: #070b14;
+      --panel-bg: rgba(15, 23, 42, 0.95);
+      --card-bg: #0f172a;
+      --border-color: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-blue: #38bdf8;
+      --accent-purple: #a855f7;
+      --pass-green: #22c55e;
+      --pass-glow: rgba(34, 197, 94, 0.45);
+      --warn-amber: #f59e0b;
+      --fail-red: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Fullscreen Game Stage */
+    #canvas-game {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: block;
+      z-index: 1;
+    }
+
+    /* Top Bar & Collapsible Drawer Wrapper */
+    #top-ui-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      pointer-events: none;
+    }
+
+    /* Non-blocking Toast Banner for Errors (Replaces native alert) */
+    #error-toast {
+      pointer-events: auto;
+      display: none;
+      background: rgba(239, 68, 68, 0.95);
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.9rem;
+      padding: 0.65rem 1.25rem;
+      text-align: center;
+      border-bottom: 2px solid #fca5a5;
+      backdrop-filter: blur(8px);
+    }
+
+    /* Persistent Header Bar */
+    .top-bar {
+      pointer-events: auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.65rem 1.25rem;
+      background: rgba(9, 13, 22, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 2px solid var(--border-color);
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      flex-wrap: wrap;
+    }
+
+    /* High-Visibility Segmented Game Mode Selector */
+    .mode-switcher {
+      display: inline-flex;
+      background: #050811;
+      border: 2px solid var(--border-color);
+      border-radius: 10px;
+      padding: 0.2rem;
+      gap: 0.2rem;
+    }
+
+    .mode-btn {
+      background: transparent;
+      color: var(--text-muted);
+      border: none;
+      padding: 0.45rem 0.9rem;
+      font-size: 0.9rem;
+      font-weight: 800;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .mode-btn:hover {
+      color: var(--text-main);
+    }
+
+    .mode-btn.active {
+      background: var(--accent-blue);
+      color: #020617;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+    }
+
+    /* Quick HUD Pills (Always visible even when drawer is closed) */
+    .hud-pills {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .hud-pill {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      padding: 0.38rem 0.8rem;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .hud-pill .label {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+    }
+
+    .hud-pill .val {
+      color: var(--accent-blue);
+      font-weight: 900;
+    }
+
+    .gate-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: #475569;
+      transition: all 0.1s;
+    }
+
+    .gate-dot.open {
+      background: var(--pass-green);
+      box-shadow: 0 0 12px var(--pass-green);
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+    }
+
+    .btn {
+      font-size: 0.9rem;
+      font-weight: 700;
+      padding: 0.55rem 1rem;
+      border-radius: 8px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: transform 0.1s, filter 0.15s, background-color 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      filter: brightness(1.1);
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    #btn-mic {
+      background-color: var(--accent-blue);
+      color: #020617;
+    }
+
+    #btn-mic.active {
+      background-color: var(--fail-red);
+      color: var(--text-main);
+    }
+
+    .btn-secondary {
+      background-color: var(--card-bg);
+      color: var(--text-main);
+      border-color: var(--border-color);
+    }
+
+    /* Collapsible Control & Diagnostic Drawer */
+    #control-drawer {
+      pointer-events: auto;
+      background: var(--panel-bg);
+      backdrop-filter: blur(16px);
+      border-bottom: 2px solid var(--border-color);
+      padding: 1rem 1.25rem;
+      display: grid;
+      grid-template-columns: 1.2fr 1.25fr 1.05fr;
+      gap: 1rem;
+      max-height: 640px;
+      opacity: 1;
+      overflow: hidden;
+      transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                  opacity 0.25s ease,
+                  padding 0.3s ease,
+                  border-bottom-width 0.3s ease;
+    }
+
+    #control-drawer.collapsed {
+      max-height: 0;
+      opacity: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      border-bottom-width: 0;
+      pointer-events: none;
+    }
+
+    .drawer-col {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
+    .col-title {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      font-weight: 800;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 0.35rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Rehearsal Presets Row */
+    .preset-group {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.45rem;
+    }
+
+    .preset-btn {
+      background: #1e293b;
+      color: var(--text-main);
+      border: 2px solid var(--border-color);
+      border-radius: 7px;
+      padding: 0.45rem 0.35rem;
+      font-size: 0.8rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.12rem;
+    }
+
+    .preset-btn span.sub {
+      font-size: 0.66rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .preset-btn:hover {
+      border-color: var(--accent-blue);
+    }
+
+    .preset-btn.active {
+      background: rgba(56, 189, 248, 0.16);
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+    }
+
+    .preset-btn.active span.sub {
+      color: #bae6fd;
+    }
+
+    /* Controls Grid inside Drawer */
+    .control-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .control-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.84rem;
+      font-weight: 700;
+    }
+
+    .control-val {
+      color: var(--accent-blue);
+      font-variant-numeric: tabular-nums;
+      font-weight: 800;
+    }
+
+    .target-selector-row {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+    }
+
+    select {
+      flex: 1;
+      background: #1e293b;
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 0.38rem 0.65rem;
+      font-size: 0.92rem;
+      font-weight: 700;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .step-btn {
+      background: #1e293b;
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 0.38rem 0.75rem;
+      font-size: 0.92rem;
+      font-weight: 800;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .step-btn:hover {
+      border-color: var(--accent-blue);
+    }
+
+    /* Toggle Switch for Octave-Free Mode */
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #070b14;
+      padding: 0.45rem 0.75rem;
+      border-radius: 7px;
+      border: 1px solid var(--border-color);
+    }
+
+    .toggle-label-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .toggle-label-group .main-lbl {
+      font-size: 0.84rem;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+
+    .toggle-label-group .sub-lbl {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 46px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider-toggle {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #334155;
+      transition: 0.2s;
+      border-radius: 24px;
+    }
+
+    .slider-toggle:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.2s;
+      border-radius: 50%;
+    }
+
+    .switch input:checked + .slider-toggle {
+      background-color: var(--pass-green);
+    }
+
+    .switch input:checked + .slider-toggle:before {
+      transform: translateX(22px);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 7px;
+      accent-color: var(--accent-blue);
+      cursor: pointer;
+    }
+
+    /* Mini Readouts & Diagnostic Canvases */
+    .mini-readouts {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.45rem;
+      text-align: center;
+      background: #070b14;
+      padding: 0.5rem;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .mini-metric .lbl {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      display: block;
+    }
+
+    .mini-metric .num {
+      font-size: 1.4rem;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .diag-canvas-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .diag-canvas-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.74rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .diag-canvas {
+      width: 100%;
+      background: #070b14;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      display: block;
+    }
+
+    /* Status Beacon inside Drawer */
+    .status-beacon {
+      flex: 1;
+      border-radius: 10px;
+      background: #070b14;
+      border: 2px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 0.75rem;
+      gap: 0.35rem;
+      text-align: center;
+      transition: all 0.15s ease-out;
+    }
+
+    .status-beacon.triggered {
+      background: rgba(34, 197, 94, 0.14);
+      border-color: var(--pass-green);
+      box-shadow: 0 0 25px var(--pass-glow), inset 0 0 15px var(--pass-glow);
+    }
+
+    .beacon-light {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: #334155;
+      border: 3px solid #475569;
+      transition: all 0.1s ease-out;
+    }
+
+    .status-beacon.triggered .beacon-light {
+      background: var(--pass-green);
+      border-color: #86efac;
+      box-shadow: 0 0 20px var(--pass-green);
+    }
+
+    .beacon-text {
+      font-size: 1.05rem;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .status-beacon.triggered .beacon-text {
+      color: var(--pass-green);
+    }
+
+    .beacon-subtext {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    @media (max-width: 1120px) {
+      #control-drawer {
+        grid-template-columns: 1fr;
+        max-height: 82vh;
+        overflow-y: auto;
+      }
+      .hud-pills {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- FULLSCREEN GAME STAGE CANVAS -->
+  <canvas id="canvas-game"></canvas>
+
+  <!-- TOP BAR & COLLAPSIBLE DIAGNOSTIC DRAWER -->
+  <div id="top-ui-container">
+    <div id="error-toast"></div>
+
+    <header class="top-bar">
+      <div class="brand-group">
+        <!-- Segmented Game Mode Selector -->
+        <div class="mode-switcher" role="tablist" aria-label="Game Mode Selector">
+          <button class="mode-btn active" data-mode="GLASS">1. Opera Glass Breaker</button>
+          <button class="mode-btn" data-mode="ROCKET">2. Rocket Launch</button>
+          <button class="mode-btn" data-mode="MONSTER">3. Monster Laser</button>
+        </div>
+
+        <div class="hud-pills">
+          <div class="hud-pill">
+            <span class="label">Target</span>
+            <span id="hud-target" class="val">C (Any Oct)</span>
+          </div>
+          <div class="hud-pill">
+            <span class="label">Sung</span>
+            <span id="hud-note" class="val">--</span>
+          </div>
+          <div class="hud-pill">
+            <div id="hud-gate-dot" class="gate-dot"></div>
+            <span id="hud-progress" class="val">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="top-actions">
+        <button id="btn-fullscreen" class="btn btn-secondary" title="Toggle Projector Fullscreen">Fullscreen &#x26F6;</button>
+        <button id="btn-drawer-toggle" class="btn btn-secondary">Hide Controls &blacktriangle;</button>
+        <button id="btn-mic" class="btn">Start Microphone</button>
+      </div>
+    </header>
+
+    <section id="control-drawer">
+      <!-- COLUMN 1: Rehearsal Presets + Pitch & Volume Calibration -->
+      <div class="drawer-col">
+        <div class="col-title">
+          <span>1. Rehearsal Presets &amp; Thresholds</span>
+        </div>
+
+        <!-- Quick Rehearsal Preset Buttons -->
+        <div class="preset-group">
+          <button class="preset-btn" data-preset="WARMUP">
+            <span>Warm-Up</span>
+            <span class="sub">&plusmn;40¢ • Vol 35 • 2.5s</span>
+          </button>
+          <button class="preset-btn" data-preset="BATTLE">
+            <span>Section Battle</span>
+            <span class="sub">&plusmn;25¢ • Vol 55 • 3.5s</span>
+          </button>
+          <button class="preset-btn" data-preset="BOSS">
+            <span>Boss Mode</span>
+            <span class="sub">&plusmn;15¢ • Vol 70 • 5.0s</span>
+          </button>
+        </div>
+
+        <div class="control-row">
+          <div class="control-header">
+            <label for="select-target">Target Pitch (C3 – C6)</label>
+            <span id="val-target-hz" class="control-val">261.6 Hz</span>
+          </div>
+          <div class="target-selector-row">
+            <button id="btn-note-down" class="step-btn" title="Half-step down">&minus;</button>
+            <select id="select-target"></select>
+            <button id="btn-note-up" class="step-btn" title="Half-step up">&plus;</button>
+          </div>
+        </div>
+
+        <!-- Octave-Free Mode Toggle (Default: ON) -->
+        <div class="toggle-row">
+          <div class="toggle-label-group">
+            <span class="main-lbl">Octave-Free Mode</span>
+            <span class="sub-lbl">Unchanged &amp; changed voices match any octave</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggle-octave-free" checked>
+            <span class="slider-toggle"></span>
+          </label>
+        </div>
+
+        <div class="control-row">
+          <div class="control-header">
+            <label for="slider-tolerance">Pitch Tolerance Window</label>
+            <span id="val-tolerance" class="control-val">&plusmn;30 cents</span>
+          </div>
+          <input type="range" id="slider-tolerance" min="10" max="60" value="30" step="1">
+        </div>
+
+        <div class="control-row">
+          <div class="control-header">
+            <label for="slider-vol-floor">Volume Floor Threshold</label>
+            <span id="val-vol-floor" class="control-val">25 / 100</span>
+          </div>
+          <input type="range" id="slider-vol-floor" min="0" max="100" value="25" step="1">
+        </div>
+      </div>
+
+      <!-- COLUMN 2: Live Audio Telemetry -->
+      <div class="drawer-col">
+        <div class="col-title">2. Live Audio Telemetry</div>
+
+        <div class="mini-readouts">
+          <div class="mini-metric">
+            <span class="lbl">Note</span>
+            <span id="readout-note" class="num">--</span>
+          </div>
+          <div class="mini-metric">
+            <span class="lbl">Freq</span>
+            <span id="readout-hz" class="num" style="color: var(--accent-blue); font-size: 1.15rem;">-- Hz</span>
+          </div>
+          <div class="mini-metric">
+            <span class="lbl">Target Offset</span>
+            <span id="readout-cents" class="num" style="color: var(--accent-blue); font-size: 1.15rem;">-- ¢</span>
+          </div>
+        </div>
+
+        <div class="diag-canvas-wrap">
+          <div class="diag-canvas-label">
+            <span>Pitch Deviation (-50¢ to +50¢)</span>
+            <span id="label-target-reminder">Target: C (Any Octave)</span>
+          </div>
+          <canvas id="canvas-pitch" class="diag-canvas" width="460" height="72"></canvas>
+        </div>
+
+        <div class="diag-canvas-wrap">
+          <div class="diag-canvas-label">
+            <span>Projection Meter (Scaled RMS)</span>
+            <span id="readout-vol">0 / 100</span>
+          </div>
+          <canvas id="canvas-volume" class="diag-canvas" width="460" height="46"></canvas>
+        </div>
+      </div>
+
+      <!-- COLUMN 3: Game Sustain Engine & Gate Status -->
+      <div class="drawer-col">
+        <div class="col-title">3. Sustain Engine &amp; Gate Status</div>
+
+        <div class="control-row">
+          <div class="control-header">
+            <label for="slider-sustain">Sustain Duration (To Win)</label>
+            <span id="val-sustain" class="control-val">3.0 s</span>
+          </div>
+          <input type="range" id="slider-sustain" min="1.0" max="6.0" value="3.0" step="0.1">
+        </div>
+
+        <div class="control-row">
+          <div class="control-header">
+            <label for="slider-decay">Decay Speed (When Dropped)</label>
+            <span id="val-decay" class="control-val">40% / s</span>
+          </div>
+          <input type="range" id="slider-decay" min="10" max="150" value="40" step="5">
+        </div>
+
+        <div id="status-beacon" class="status-beacon">
+          <div class="beacon-light"></div>
+          <div id="beacon-text" class="beacon-text">GATE LOCKED</div>
+          <div id="beacon-subtext" class="beacon-subtext">Click 'Start Microphone' to begin</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    /**
+     * ============================================================================
+     * 1. MUSICAL CONSTANTS & UTILITIES
+     * ============================================================================
+     */
+    const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    const A4_FREQ = 440.0;
+    const A4_MIDI = 69;
+
+    const MIN_TARGET_MIDI = 48; // C3
+    const MAX_TARGET_MIDI = 84; // C6
+
+    const REHEARSAL_PRESETS = {
+      WARMUP: { tolerance: 40, volumeFloor: 35, sustain: 2.5, decay: 25 },
+      BATTLE: { tolerance: 25, volumeFloor: 55, sustain: 3.5, decay: 45 },
+      BOSS:   { tolerance: 15, volumeFloor: 70, sustain: 5.0, decay: 85 }
+    };
+
+    function midiToFreq(midi) {
+      return A4_FREQ * Math.pow(2, (midi - A4_MIDI) / 12);
+    }
+
+    function midiToNoteName(midi) {
+      const name = NOTE_NAMES[midi % 12];
+      const octave = Math.floor(midi / 12) - 1;
+      return `${name}${octave}`;
+    }
+
+    function midiToPitchClass(midi) {
+      return NOTE_NAMES[((midi % 12) + 12) % 12];
+    }
+
+    function analyzeFrequency(freq) {
+      const exactMidi = 69 + 12 * Math.log2(freq / 440);
+      const nearestMidi = Math.round(exactMidi);
+      const cents = Math.round((exactMidi - nearestMidi) * 100);
+      return {
+        midi: nearestMidi,
+        noteName: midiToNoteName(nearestMidi),
+        cents: cents,
+        exactMidi: exactMidi
+      };
+    }
+
+    /**
+     * ============================================================================
+     * 2. APPLICATION & UNIFIED GAME STATE
+     * ============================================================================
+     */
+    const AppState = {
+      isListening: false,
+      isDrawerCollapsed: false,
+      gameMode: "GLASS",     // "GLASS" | "ROCKET" | "MONSTER"
+      activePreset: null,    // "WARMUP" | "BATTLE" | "BOSS" | null
+
+      // Calibration Settings
+      targetMidi: 60,        // Default C4
+      octaveFree: true,      // Default ON: Modulo-12 pitch class matching
+      pitchTolerance: 30,    // ±30 cents
+      volumeFloor: 25,       // 0-100 scale
+
+      // Game Sustain Settings
+      sustainDuration: 3.0,  // Seconds required to reach 100%
+      decaySpeed: 40,        // Percentage points lost per second when gate closes
+
+      // Live Audio Telemetry
+      currentVolume: 0,
+      detectedFreq: null,
+      detectedExactMidi: null,
+      detectedMidi: null,
+      detectedNoteName: "--",
+      detectedCents: 0,      // Deviation from nearest chromatic note (-50 to +50)
+      targetCentsOff: 0,     // Deviation from target pitch (or target pitch class in Octave-Free mode)
+
+      // Smoothed UI values
+      smoothedCents: 0,
+      smoothedVolume: 0,
+
+      // Computed Gate Status
+      isVolumePassing: false,
+      isNoteMatching: false,
+      isPitchWithinTolerance: false,
+      isGateOpen: false,
+
+      // Unified Game Progress State
+      progress: 0,           // 0.0 to 100.0 (Skins normalize to 0.0 - 1.0)
+      gamePhase: "ACTIVE",   // "ACTIVE" | "VICTORY"
+      victoryTimer: 0,       // Counts down from 3.0s to 0.0s after reaching 100%
+      RESET_DELAY: 3.0       // 3-second auto-reset after victory
+    };
+
+    /**
+     * Evaluates Pitch Match (including Modulo-12 Octave-Free logic) & Volume Gate
+     */
+    function evaluateGateState() {
+      AppState.isVolumePassing = AppState.currentVolume >= AppState.volumeFloor;
+
+      if (AppState.detectedFreq !== null && AppState.detectedExactMidi !== null) {
+        if (AppState.octaveFree) {
+          // Octave-Free Modulo 12 Comparison
+          let diff = (AppState.detectedExactMidi - AppState.targetMidi) % 12;
+          if (diff > 6) diff -= 12;
+          if (diff < -6) diff += 12;
+          const centsOff = diff * 100;
+
+          AppState.targetCentsOff = Math.round(centsOff);
+          AppState.isNoteMatching = Math.abs(centsOff) <= 50;
+          AppState.isPitchWithinTolerance = Math.abs(centsOff) <= AppState.pitchTolerance;
+        } else {
+          // Strict Octave Matching
+          const diff = AppState.detectedExactMidi - AppState.targetMidi;
+          const centsOff = diff * 100;
+
+          AppState.targetCentsOff = Math.round(centsOff);
+          AppState.isNoteMatching = (AppState.detectedMidi === AppState.targetMidi);
+          AppState.isPitchWithinTolerance = Math.abs(centsOff) <= AppState.pitchTolerance;
+        }
+      } else {
+        AppState.targetCentsOff = 0;
+        AppState.isNoteMatching = false;
+        AppState.isPitchWithinTolerance = false;
+      }
+
+      AppState.isGateOpen = (
+        AppState.isVolumePassing &&
+        AppState.isPitchWithinTolerance
+      );
+    }
+
+    /**
+     * ============================================================================
+     * 3. AUDIO ENGINE & DSP (Web Audio API + Autocorrelation + Mode Victory SFX)
+     * ============================================================================
+     */
+    const AudioEngine = {
+      audioCtx: null,
+      analyser: null,
+      mediaStream: null,
+      buffer: null,
+
+      async start() {
+        if (this.audioCtx) {
+          await this.stop();
+        }
+
+        this.mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          }
+        });
+
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        this.audioCtx = new AudioContextClass();
+
+        if (this.audioCtx.state === "suspended") {
+          await this.audioCtx.resume();
+        }
+
+        const source = this.audioCtx.createMediaStreamSource(this.mediaStream);
+        this.analyser = this.audioCtx.createAnalyser();
+        this.analyser.fftSize = 2048;
+        this.buffer = new Float32Array(this.analyser.fftSize);
+
+        source.connect(this.analyser);
+        AppState.isListening = true;
+      },
+
+      async stop() {
+        if (this.mediaStream) {
+          this.mediaStream.getTracks().forEach(track => track.stop());
+          this.mediaStream = null;
+        }
+        if (this.audioCtx) {
+          await this.audioCtx.close();
+          this.audioCtx = null;
+        }
+
+        AppState.isListening = false;
+        AppState.currentVolume = 0;
+        this.clearPitch();
+        evaluateGateState();
+      },
+
+      sampleAudio() {
+        if (!AppState.isListening || !this.analyser) return;
+
+        this.analyser.getFloatTimeDomainData(this.buffer);
+
+        const rms = this.calculateRMS(this.buffer);
+        AppState.currentVolume = this.rmsToScaledVolume(rms);
+
+        if (rms > 0.004) {
+          const freq = this.autoCorrelate(this.buffer, this.audioCtx.sampleRate);
+          if (freq !== -1 && freq >= 75 && freq <= 1500) {
+            const pitchData = analyzeFrequency(freq);
+            AppState.detectedFreq = freq;
+            AppState.detectedExactMidi = pitchData.exactMidi;
+            AppState.detectedMidi = pitchData.midi;
+            AppState.detectedNoteName = pitchData.noteName;
+            AppState.detectedCents = pitchData.cents;
+          } else {
+            this.clearPitch();
+          }
+        } else {
+          this.clearPitch();
+        }
+
+        evaluateGateState();
+
+        AppState.smoothedVolume += (AppState.currentVolume - AppState.smoothedVolume) * 0.3;
+        if (AppState.detectedFreq !== null) {
+          const activeCents = AppState.isNoteMatching ? AppState.targetCentsOff : AppState.detectedCents;
+          AppState.smoothedCents += (activeCents - AppState.smoothedCents) * 0.25;
+        }
+      },
+
+      clearPitch() {
+        AppState.detectedFreq = null;
+        AppState.detectedExactMidi = null;
+        AppState.detectedMidi = null;
+        AppState.detectedNoteName = "--";
+        AppState.detectedCents = 0;
+        AppState.targetCentsOff = 0;
+      },
+
+      calculateRMS(buf) {
+        let sumSquares = 0;
+        for (let i = 0; i < buf.length; i++) {
+          sumSquares += buf[i] * buf[i];
+        }
+        return Math.sqrt(sumSquares / buf.length);
+      },
+
+      rmsToScaledVolume(rms) {
+        if (rms <= 0.0001) return 0;
+        const db = 20 * Math.log10(rms);
+        const minDb = -60;
+        const maxDb = -5;
+        const normalized = (db - minDb) / (maxDb - minDb);
+        return Math.max(0, Math.min(100, Math.round(normalized * 100)));
+      },
+
+      autoCorrelate(buf, sampleRate) {
+        const SIZE = buf.length;
+        let r1 = 0;
+        let r2 = SIZE - 1;
+        const thres = 0.2;
+
+        for (let i = 0; i < SIZE / 2; i++) {
+          if (Math.abs(buf[i]) < thres) { r1 = i; break; }
+        }
+        for (let i = 1; i < SIZE / 2; i++) {
+          if (Math.abs(buf[SIZE - i]) < thres) { r2 = SIZE - i; break; }
+        }
+
+        const trimmed = buf.slice(r1, r2);
+        const newSize = trimmed.length;
+        if (newSize < 64) return -1;
+
+        const c = new Float32Array(newSize);
+        for (let i = 0; i < newSize; i++) {
+          let sum = 0;
+          for (let j = 0; j < newSize - i; j++) {
+            sum += trimmed[j] * trimmed[j + i];
+          }
+          c[i] = sum;
+        }
+
+        let d = 0;
+        while (d < newSize - 1 && c[d] > c[d + 1]) {
+          d++;
+        }
+        if (d >= newSize - 1) return -1;
+
+        let maxval = -1;
+        let maxpos = -1;
+        for (let i = d; i < newSize; i++) {
+          if (c[i] > maxval) {
+            maxval = c[i];
+            maxpos = i;
+          }
+        }
+
+        if (maxval < c[0] * 0.55) {
+          return -1;
+        }
+
+        let T0 = maxpos;
+        if (T0 > 0 && T0 < newSize - 1) {
+          const x1 = c[T0 - 1];
+          const x2 = c[T0];
+          const x3 = c[T0 + 1];
+          const a = (x1 + x3 - 2 * x2) / 2;
+          const b = (x3 - x1) / 2;
+          if (a !== 0) {
+            T0 = T0 - b / (2 * a);
+          }
+        }
+
+        return sampleRate / T0;
+      },
+
+      playVictorySound(mode) {
+        if (!this.audioCtx) return;
+        const now = this.audioCtx.currentTime;
+
+        if (mode === "GLASS") {
+          const freqs = [1480, 2120, 2890, 3650, 4420];
+          freqs.forEach((f, idx) => {
+            const osc = this.audioCtx.createOscillator();
+            const gain = this.audioCtx.createGain();
+            osc.type = "triangle";
+            osc.frequency.setValueAtTime(f, now + idx * 0.015);
+            osc.frequency.exponentialRampToValueAtTime(f * 0.65, now + 0.35);
+
+            gain.gain.setValueAtTime(0.16, now + idx * 0.015);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+            osc.connect(gain);
+            gain.connect(this.audioCtx.destination);
+            osc.start(now + idx * 0.015);
+            osc.stop(now + 0.46);
+          });
+        } else if (mode === "ROCKET") {
+          const notes = [523.25, 659.25, 783.99, 1046.50];
+          notes.forEach((f, idx) => {
+            const osc = this.audioCtx.createOscillator();
+            const gain = this.audioCtx.createGain();
+            osc.type = "sawtooth";
+            osc.frequency.setValueAtTime(f, now + idx * 0.08);
+            gain.gain.setValueAtTime(0.12, now + idx * 0.08);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.45);
+            osc.connect(gain);
+            gain.connect(this.audioCtx.destination);
+            osc.start(now + idx * 0.08);
+            osc.stop(now + idx * 0.08 + 0.46);
+          });
+        } else if (mode === "MONSTER") {
+          const osc = this.audioCtx.createOscillator();
+          const gain = this.audioCtx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(920, now);
+          osc.frequency.exponentialRampToValueAtTime(110, now + 0.55);
+          gain.gain.setValueAtTime(0.22, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.58);
+          osc.connect(gain);
+          gain.connect(this.audioCtx.destination);
+          osc.start(now);
+          osc.stop(now + 0.6);
+        }
+      }
+    };
+
+    /**
+     * ============================================================================
+     * 4. SHARED STAGE HUD OVERLAY (Bottom Progress Bar & Victory Banner)
+     * ============================================================================
+     */
+    const StageHUD = {
+      drawMeter(ctx, w, h, progRatio, modeLabel) {
+        const centerX = w / 2;
+        const barW = Math.min(680, w * 0.82);
+        const barH = 28;
+        const barX = centerX - barW / 2;
+        const barY = h - 46;
+
+        ctx.fillStyle = "rgba(9, 13, 22, 0.90)";
+        ctx.strokeStyle = "#fbbf24";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(barX, barY, barW, barH, 14);
+        ctx.fill();
+        ctx.stroke();
+
+        const fillW = Math.max(0, (barW - 6) * progRatio);
+        if (fillW > 0) {
+          const fillGrad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+          if (progRatio >= 0.90) {
+            fillGrad.addColorStop(0, "#f59e0b");
+            fillGrad.addColorStop(1, "#ef4444");
+          } else {
+            fillGrad.addColorStop(0, "#38bdf8");
+            fillGrad.addColorStop(1, "#22c55e");
+          }
+          ctx.fillStyle = fillGrad;
+          ctx.beginPath();
+          ctx.roundRect(barX + 3, barY + 3, fillW, barH - 6, 11);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = "#f8fafc";
+        ctx.font = "800 14px system-ui";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const statusLabel = AppState.gamePhase === "VICTORY"
+          ? `RESETTING STAGE IN ${Math.ceil(AppState.victoryTimer)}s...`
+          : `${modeLabel}: ${Math.round(AppState.progress)}% (${(progRatio * AppState.sustainDuration).toFixed(1)}s / ${AppState.sustainDuration.toFixed(1)}s)`;
+        ctx.fillText(statusLabel, centerX, barY + barH / 2);
+      },
+
+      drawVictoryBanner(ctx, w, h, title, accentColor) {
+        if (AppState.gamePhase !== "VICTORY") return;
+        const centerX = w / 2;
+        const bannerY = h * 0.30;
+
+        ctx.save();
+        ctx.fillStyle = "rgba(9, 13, 22, 0.92)";
+        ctx.strokeStyle = accentColor;
+        ctx.lineWidth = 5;
+        ctx.shadowColor = accentColor;
+        ctx.shadowBlur = 35;
+        ctx.beginPath();
+        ctx.roundRect(centerX - 340, bannerY - 68, 680, 136, 20);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = accentColor;
+        ctx.font = "900 52px system-ui";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(title, centerX, bannerY - 12);
+
+        const targetDesc = AppState.octaveFree
+          ? `${midiToPitchClass(AppState.targetMidi)} (Octave-Free)`
+          : midiToNoteName(AppState.targetMidi);
+
+        ctx.fillStyle = "#f8fafc";
+        ctx.font = "700 19px system-ui";
+        ctx.fillText(
+          `Target ${targetDesc} Sustained for ${AppState.sustainDuration.toFixed(1)}s • Encore in ${AppState.victoryTimer.toFixed(1)}s`,
+          centerX,
+          bannerY + 40
+        );
+        ctx.restore();
+      }
+    };
+
+    /**
+     * ============================================================================
+     * 5. SKIN 1: OPERA STAGE GLASS BREAKER
+     *    (Velvet Curtains, Footlights, Comical Opera Singer, Pedestal & Crystal Glass)
+     * ============================================================================
+     */
+    const GlassBreakerSkin = {
+      crackSegments: [],
+      shards: [],
+      shockwaves: [],
+      soundWaves: [],
+      time: 0,
+      waveSpawnTimer: 0,
+
+      init() {
+        this.generateCrackNetwork();
+      },
+
+      onReset() {
+        this.shards = [];
+        this.shockwaves = [];
+        this.soundWaves = [];
+        this.generateCrackNetwork();
+      },
+
+      generateCrackNetwork() {
+        this.crackSegments = [];
+        const origins = [
+          { x: 0, y: -235, baseAngle: Math.PI / 2 },
+          { x: -68, y: -145, baseAngle: 0.25 },
+          { x: 68, y: -145, baseAngle: Math.PI - 0.25 },
+          { x: 0, y: -60, baseAngle: -Math.PI / 2 }
+        ];
+
+        const spawnBranch = (x, y, angle, depth, startThreshold) => {
+          if (depth > 5 || startThreshold >= 0.98) return;
+
+          const length = 18 + Math.random() * 24;
+          const nx = x + Math.cos(angle) * length;
+          const ny = y + Math.sin(angle) * length;
+          const endThreshold = Math.min(0.99, startThreshold + 0.08 + Math.random() * 0.12);
+
+          this.crackSegments.push({
+            x1: x,
+            y1: y,
+            x2: nx,
+            y2: ny,
+            startProg: startThreshold,
+            endProg: endThreshold,
+            weight: Math.max(1, 3.2 - depth * 0.45)
+          });
+
+          spawnBranch(nx, ny, angle + (Math.random() - 0.5) * 0.65, depth + 1, endThreshold);
+
+          if (Math.random() > 0.32) {
+            const forkSign = Math.random() > 0.5 ? 1 : -1;
+            spawnBranch(nx, ny, angle + forkSign * (0.45 + Math.random() * 0.5), depth + 1, endThreshold + 0.03);
+          }
+        };
+
+        origins.forEach((org, idx) => {
+          spawnBranch(org.x, org.y, org.baseAngle, 0, idx * 0.04);
+          spawnBranch(org.x, org.y, org.baseAngle + 0.45, 1, idx * 0.06 + 0.05);
+          spawnBranch(org.x, org.y, org.baseAngle - 0.45, 1, idx * 0.06 + 0.05);
+        });
+      },
+
+      onVictory() {
+        this.shards = [];
+        this.soundWaves = [];
+        this.shockwaves = [
+          { r: 20, maxR: 520, alpha: 1.0, width: 10 },
+          { r: 5, maxR: 360, alpha: 0.85, width: 5 }
+        ];
+
+        const cols = 7;
+        const rows = 9;
+        const minX = -92, maxX = 92;
+        const minY = -240, maxY = -10;
+        const stepX = (maxX - minX) / cols;
+        const stepY = (maxY - minY) / rows;
+
+        const grid = [];
+        for (let r = 0; r <= rows; r++) {
+          const rowPts = [];
+          for (let c = 0; c <= cols; c++) {
+            const jx = (c === 0 || c === cols) ? 0 : (Math.random() - 0.5) * stepX * 0.75;
+            const jy = (r === 0 || r === rows) ? 0 : (Math.random() - 0.5) * stepY * 0.75;
+            rowPts.push({ x: minX + c * stepX + jx, y: minY + r * stepY + jy });
+          }
+          grid.push(rowPts);
+        }
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const p1 = grid[r][c];
+            const p2 = grid[r][c + 1];
+            const p3 = grid[r + 1][c + 1];
+            const p4 = grid[r + 1][c];
+
+            const cx = (p1.x + p2.x + p3.x + p4.x) / 4;
+            const cy = (p1.y + p2.y + p3.y + p4.y) / 4;
+
+            const normY = (cy - minY) / (maxY - minY);
+            const maxHalfWidth = 88 * Math.sin(normY * 0.85 + 0.35);
+            if (Math.abs(cx) > maxHalfWidth) continue;
+
+            const dx = cx;
+            const dy = cy - (-135);
+            const dist = Math.hypot(dx, dy) || 1;
+            const speed = 340 + Math.random() * 540;
+
+            this.shards.push({
+              x: cx,
+              y: cy,
+              vx: (dx / dist) * speed + (Math.random() - 0.5) * 180,
+              vy: (dy / dist) * speed - 180 - Math.random() * 220,
+              rot: 0,
+              vRot: (Math.random() - 0.5) * 14,
+              pts: [
+                { x: p1.x - cx, y: p1.y - cy },
+                { x: p2.x - cx, y: p2.y - cy },
+                { x: p3.x - cx, y: p3.y - cy },
+                { x: p4.x - cx, y: p4.y - cy }
+              ],
+              glint: Math.random() > 0.5
+            });
+          }
+        }
+      },
+
+      update(dt, progRatio) {
+        this.time += dt;
+
+        // Spawn rippling sound waves from Opera Singer toward the Glass when singing
+        if (AppState.gamePhase === "ACTIVE" && progRatio > 0) {
+          this.waveSpawnTimer += dt;
+          const interval = Math.max(0.09, 0.24 - progRatio * 0.12);
+          if (this.waveSpawnTimer >= interval) {
+            this.waveSpawnTimer = 0;
+            this.soundWaves.push({
+              progress: 0,
+              amp: 18 + (AppState.currentVolume / 100) * 38,
+              alpha: 0.95
+            });
+          }
+        }
+
+        for (let i = this.soundWaves.length - 1; i >= 0; i--) {
+          const sw = this.soundWaves[i];
+          sw.progress += dt * 1.45;
+          sw.alpha = Math.max(0, 1 - sw.progress);
+          if (sw.progress >= 1) {
+            this.soundWaves.splice(i, 1);
+          }
+        }
+
+        if (AppState.gamePhase === "VICTORY") {
+          const gravity = 1350;
+          for (const s of this.shards) {
+            s.x += s.vx * dt;
+            s.y += s.vy * dt;
+            s.vy += gravity * dt;
+            s.rot += s.vRot * dt;
+          }
+          for (const sw of this.shockwaves) {
+            sw.r += 950 * dt;
+            sw.alpha = Math.max(0, 1 - sw.r / sw.maxR);
+          }
+        }
+      },
+
+      traceBowlPath(ctx) {
+        ctx.beginPath();
+        ctx.moveTo(-78, -240);
+        ctx.bezierCurveTo(-102, -120, -68, -25, 0, -12);
+        ctx.bezierCurveTo(68, -25, 102, -120, 78, -240);
+        ctx.closePath();
+      },
+
+      render(ctx, w, h, progRatio) {
+        const stageFloorY = h * 0.76;
+        const singerX = w * 0.27;
+        const pedestalX = w * 0.72;
+        const pedestalTopY = stageFloorY - 115;
+
+        // 1. Opera Theater Backdrop & Spotlights
+        this.drawOperaStage(ctx, w, h, stageFloorY, singerX, pedestalX, progRatio);
+
+        // 2. Ornate Classical Pedestal on Stage Right
+        this.drawClassicalPedestal(ctx, pedestalX, stageFloorY, pedestalTopY);
+
+        // 3. Rippling Acoustic Soundwaves traveling from Singer's Mouth to Glass
+        if (AppState.gamePhase === "ACTIVE" && this.soundWaves.length > 0) {
+          const mouthX = singerX + 52;
+          const mouthY = stageFloorY - 195;
+          const targetX = pedestalX - 65;
+          const targetY = pedestalTopY - 140;
+
+          for (const sw of this.soundWaves) {
+            const wx = mouthX + (targetX - mouthX) * sw.progress;
+            const wy = mouthY + (targetY - mouthY) * sw.progress;
+            const radius = 22 + sw.progress * 75;
+
+            ctx.save();
+            ctx.strokeStyle = progRatio >= 0.90
+              ? `rgba(244, 63, 94, ${sw.alpha})`
+              : `rgba(250, 204, 21, ${sw.alpha})`;
+            ctx.lineWidth = 4;
+            ctx.shadowColor = progRatio >= 0.90 ? "#f43f5e" : "#facc15";
+            ctx.shadowBlur = 12;
+            ctx.beginPath();
+            ctx.arc(wx, wy, radius, -0.65, 0.65);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+
+        // 4. Animated Comical Opera Singer on Stage Left
+        this.drawOperaSinger(ctx, singerX, stageFloorY, progRatio);
+
+        // 5. Calculate Glass Vibration on the Pedestal
+        let shakeX = 0, shakeY = 0, shakeRot = 0;
+        if (AppState.gamePhase === "ACTIVE" && progRatio > 0) {
+          if (progRatio < 0.90) {
+            const amp = 1.0 + progRatio * 5.5;
+            shakeX = Math.sin(this.time * 75) * amp;
+            shakeY = Math.cos(this.time * 62) * (amp * 0.35);
+            shakeRot = Math.sin(this.time * 55) * (progRatio * 0.025);
+          } else {
+            const violentAmp = 11 + (progRatio - 0.90) * 120;
+            shakeX = (Math.random() - 0.5) * violentAmp * 2;
+            shakeY = (Math.random() - 0.5) * violentAmp;
+            shakeRot = (Math.random() - 0.5) * 0.09;
+          }
+        }
+
+        // 6. Render Glass or Shattered Shards atop Pedestal
+        ctx.save();
+        ctx.translate(pedestalX + shakeX, pedestalTopY + shakeY);
+        ctx.scale(0.88, 0.88);
+        ctx.rotate(shakeRot);
+
+        if (AppState.gamePhase === "ACTIVE") {
+          this.drawIntactGlass(ctx, progRatio);
+        } else {
+          this.drawShatteredState(ctx);
+        }
+        ctx.restore();
+
+        // 7. Critical Resonance Callout
+        if (AppState.gamePhase === "ACTIVE" && progRatio >= 0.90) {
+          ctx.save();
+          ctx.fillStyle = "#facc15";
+          ctx.font = "900 26px system-ui";
+          ctx.textAlign = "center";
+          ctx.shadowColor = "rgba(244, 63, 94, 0.95)";
+          ctx.shadowBlur = 18;
+          ctx.fillText("CRITICAL OPERA RESONANCE — BELT IT!", w / 2, h - 82);
+          ctx.restore();
+        }
+
+        StageHUD.drawMeter(ctx, w, h, progRatio, "OPERA RESONANCE");
+        StageHUD.drawVictoryBanner(ctx, w, h, "SHATTERED!", "#facc15");
+      },
+
+      drawOperaStage(ctx, w, h, stageFloorY, singerX, pedestalX, progRatio) {
+        // Deep Theater Cyclorama Wall
+        const wallGrad = ctx.createRadialGradient(w / 2, stageFloorY - 180, 50, w / 2, stageFloorY - 120, w * 0.75);
+        if (AppState.gamePhase === "VICTORY") {
+          wallGrad.addColorStop(0, "#3b1d5e");
+          wallGrad.addColorStop(1, "#090514");
+        } else if (progRatio >= 0.90) {
+          wallGrad.addColorStop(0, "#4c0519");
+          wallGrad.addColorStop(1, "#09040a");
+        } else {
+          wallGrad.addColorStop(0, "#1e1b4b");
+          wallGrad.addColorStop(1, "#070612");
+        }
+        ctx.fillStyle = wallGrad;
+        ctx.fillRect(0, 0, w, stageFloorY);
+
+        // Dual Theater Spotlights (On Singer and Pedestal)
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        const spots = [singerX, pedestalX];
+        spots.forEach(sx => {
+          const spotGrad = ctx.createLinearGradient(sx, 0, sx, stageFloorY);
+          spotGrad.addColorStop(0, "rgba(254, 240, 138, 0.20)");
+          spotGrad.addColorStop(1, "rgba(254, 240, 138, 0.02)");
+          ctx.fillStyle = spotGrad;
+          ctx.beginPath();
+          ctx.moveTo(sx - 40, 0);
+          ctx.lineTo(sx + 40, 0);
+          ctx.lineTo(sx + 165, stageFloorY);
+          ctx.lineTo(sx - 165, stageFloorY);
+          ctx.closePath();
+          ctx.fill();
+        });
+        ctx.restore();
+
+        // Wooden Stage Floorboards with Perspective Planks
+        const floorGrad = ctx.createLinearGradient(0, stageFloorY, 0, h);
+        floorGrad.addColorStop(0, "#451a03");
+        floorGrad.addColorStop(0.5, "#290f02");
+        floorGrad.addColorStop(1, "#120601");
+        ctx.fillStyle = floorGrad;
+        ctx.fillRect(0, stageFloorY, w, h - stageFloorY);
+
+        // Stage Plank Lines
+        ctx.strokeStyle = "rgba(120, 53, 15, 0.55)";
+        ctx.lineWidth = 2;
+        const vanishX = w / 2;
+        const vanishY = stageFloorY - 300;
+        for (let i = -10; i <= 10; i++) {
+          const bottomX = vanishX + i * (w / 7);
+          const topX = vanishX + (bottomX - vanishX) * ((stageFloorY - vanishY) / (h - vanishY));
+          ctx.beginPath();
+          ctx.moveTo(topX, stageFloorY);
+          ctx.lineTo(bottomX, h);
+          ctx.stroke();
+        }
+
+        // Apron Gold Trim
+        ctx.fillStyle = "#d97706";
+        ctx.fillRect(0, stageFloorY - 3, w, 6);
+
+        // Side Velvet Curtains (Left & Right Swags)
+        const drawSideCurtain = (isLeft) => {
+          ctx.save();
+          const edgeX = isLeft ? 0 : w;
+          const dir = isLeft ? 1 : -1;
+          const curtainGrad = ctx.createLinearGradient(edgeX, 0, edgeX + dir * 180, 0);
+          curtainGrad.addColorStop(0, "#450a0a");
+          curtainGrad.addColorStop(0.5, "#991b1b");
+          curtainGrad.addColorStop(1, "#7f1d1d");
+
+          ctx.fillStyle = curtainGrad;
+          ctx.strokeStyle = "#fbbf24";
+          ctx.lineWidth = 4;
+
+          ctx.beginPath();
+          ctx.moveTo(edgeX, 0);
+          ctx.lineTo(edgeX + dir * 165, 0);
+          ctx.bezierCurveTo(
+            edgeX + dir * 145, stageFloorY * 0.45,
+            edgeX + dir * 65, stageFloorY * 0.62,
+            edgeX + dir * 115, stageFloorY
+          );
+          ctx.lineTo(edgeX, stageFloorY);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // Gold Tie-Back Tassel
+          ctx.fillStyle = "#facc15";
+          ctx.beginPath();
+          ctx.arc(edgeX + dir * 92, stageFloorY * 0.58, 12, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        };
+        drawSideCurtain(true);
+        drawSideCurtain(false);
+
+        // Top Red Velvet Valance Scallops & Gold Fringe
+        const scallopCount = 7;
+        const scallopW = w / scallopCount;
+        for (let i = 0; i < scallopCount; i++) {
+          const sx = i * scallopW;
+          const valGrad = ctx.createLinearGradient(sx, 0, sx, 115);
+          valGrad.addColorStop(0, "#450a0a");
+          valGrad.addColorStop(1, "#991b1b");
+
+          ctx.fillStyle = valGrad;
+          ctx.beginPath();
+          ctx.moveTo(sx, 0);
+          ctx.lineTo(sx + scallopW, 0);
+          ctx.lineTo(sx + scallopW, 65);
+          ctx.quadraticCurveTo(sx + scallopW / 2, 125, sx, 65);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.strokeStyle = "#fbbf24";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(sx, 65);
+          ctx.quadraticCurveTo(sx + scallopW / 2, 125, sx + scallopW, 65);
+          ctx.stroke();
+        }
+
+        // Classic Brass Footlights along the Stage Apron
+        const lightCount = 9;
+        const spacing = w / (lightCount + 1);
+        for (let i = 1; i <= lightCount; i++) {
+          const lx = i * spacing;
+          const ly = stageFloorY + 14;
+
+          const glow = ctx.createRadialGradient(lx, ly, 4, lx, ly - 25, 58);
+          glow.addColorStop(0, "rgba(253, 224, 71, 0.55)");
+          glow.addColorStop(1, "rgba(253, 224, 71, 0)");
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(lx, ly - 10, 58, Math.PI, 0);
+          ctx.fill();
+
+          ctx.fillStyle = "#b45309";
+          ctx.strokeStyle = "#fde047";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(lx, ly, 14, Math.PI, 0);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+      },
+
+      drawClassicalPedestal(ctx, x, floorY, topY) {
+        ctx.save();
+        const colH = floorY - topY;
+
+        ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+        ctx.beginPath();
+        ctx.ellipse(x, floorY + 8, 95, 16, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        const marbleGrad = ctx.createLinearGradient(x - 65, 0, x + 65, 0);
+        marbleGrad.addColorStop(0, "#94a3b8");
+        marbleGrad.addColorStop(0.45, "#f8fafc");
+        marbleGrad.addColorStop(1, "#64748b");
+
+        ctx.fillStyle = marbleGrad;
+        ctx.strokeStyle = "#cbd5e1";
+        ctx.lineWidth = 2;
+
+        ctx.beginPath();
+        ctx.roundRect(x - 74, floorY - 22, 148, 22, 4);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.rect(x - 46, topY + 18, 92, colH - 40);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.strokeStyle = "rgba(71, 85, 105, 0.45)";
+        ctx.lineWidth = 3;
+        for (let gx = x - 32; gx <= x + 32; gx += 16) {
+          ctx.beginPath();
+          ctx.moveTo(gx, topY + 24);
+          ctx.lineTo(gx, floorY - 28);
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = marbleGrad;
+        ctx.strokeStyle = "#facc15";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(x - 78, topY, 156, 18, 5);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.restore();
+      },
+
+      drawOperaSinger(ctx, x, floorY, progRatio) {
+        const isShocked = AppState.gamePhase === "VICTORY";
+        const isSinging = AppState.gamePhase === "ACTIVE" && progRatio > 0;
+
+        const singVibX = isSinging ? Math.sin(this.time * 65) * (1.5 + progRatio * 3.5) : 0;
+        const singVibY = isSinging ? Math.cos(this.time * 50) * 1.5 : 0;
+        const shockBounceY = isShocked ? -Math.abs(Math.sin(this.time * 10)) * 18 : 0;
+
+        ctx.save();
+        ctx.translate(x + singVibX, floorY + singVibY + shockBounceY);
+
+        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+        ctx.beginPath();
+        ctx.ellipse(0, 6, 78, 15, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Flowing Red Opera Cape
+        ctx.fillStyle = "#991b1b";
+        ctx.strokeStyle = "#facc15";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-45, -175);
+        ctx.quadraticCurveTo(-95, -80, -82, -8);
+        ctx.lineTo(58, -8);
+        ctx.quadraticCurveTo(70, -90, 40, -175);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Boots
+        ctx.fillStyle = "#0f172a";
+        ctx.beginPath();
+        ctx.ellipse(-28, -6, 22, 10, 0, 0, Math.PI * 2);
+        ctx.ellipse(28, -6, 22, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Tuxedo / Tunic Body (Chest puffs out proportionally to singing progress)
+        const chestPuff = isSinging ? 12 + progRatio * 20 : 0;
+        ctx.fillStyle = "#1e293b";
+        ctx.strokeStyle = "#f8fafc";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(-54, -18);
+        ctx.bezierCurveTo(-68, -95, -58, -165, 0, -175);
+        ctx.bezierCurveTo(62 + chestPuff, -165, 72 + chestPuff, -95, 52, -18);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // White Opera Shirt Front & Red Bowtie
+        ctx.fillStyle = "#f8fafc";
+        ctx.beginPath();
+        ctx.moveTo(-18, -170);
+        ctx.lineTo(22 + chestPuff * 0.4, -170);
+        ctx.lineTo(8, -85);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = "#ef4444";
+        ctx.beginPath();
+        ctx.moveTo(-12, -168);
+        ctx.lineTo(12, -156);
+        ctx.lineTo(12, -168);
+        ctx.lineTo(-12, -156);
+        ctx.closePath();
+        ctx.fill();
+
+        // Arms Based on Pose (Waiting vs. Singing vs. Befuddled Shock)
+        ctx.strokeStyle = "#1e293b";
+        ctx.lineWidth = 18;
+        ctx.lineCap = "round";
+
+        if (isShocked) {
+          ctx.beginPath();
+          ctx.moveTo(-42, -145);
+          ctx.quadraticCurveTo(-92, -195, -75, -245);
+          ctx.moveTo(42, -145);
+          ctx.quadraticCurveTo(95, -195, 80, -245);
+          ctx.stroke();
+
+          ctx.fillStyle = "#f8fafc";
+          ctx.beginPath();
+          ctx.arc(-75, -248, 12, 0, Math.PI * 2);
+          ctx.arc(80, -248, 12, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (isSinging) {
+          ctx.beginPath();
+          ctx.moveTo(-42, -140);
+          ctx.quadraticCurveTo(-65, -110, -12, -118);
+          ctx.moveTo(42, -145);
+          ctx.quadraticCurveTo(85, -165, 108, -192);
+          ctx.stroke();
+
+          ctx.fillStyle = "#f8fafc";
+          ctx.beginPath();
+          ctx.arc(-12, -118, 11, 0, Math.PI * 2);
+          ctx.arc(108, -192, 12, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(-42, -140);
+          ctx.quadraticCurveTo(-58, -100, -10, -112);
+          ctx.moveTo(42, -140);
+          ctx.quadraticCurveTo(58, -100, 16, -112);
+          ctx.stroke();
+
+          ctx.fillStyle = "#f8fafc";
+          ctx.beginPath();
+          ctx.arc(-10, -112, 11, 0, Math.PI * 2);
+          ctx.arc(16, -112, 11, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Head
+        ctx.fillStyle = "#fed7aa";
+        ctx.strokeStyle = "#9a3412";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(4, -208, 38, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Rosy Cheeks
+        ctx.fillStyle = "rgba(244, 63, 94, 0.35)";
+        ctx.beginPath();
+        ctx.arc(-12, -200, 9, 0, Math.PI * 2);
+        ctx.arc(26, -200, 9, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Eyes
+        if (isShocked) {
+          ctx.fillStyle = "#ffffff";
+          ctx.strokeStyle = "#0f172a";
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(-4, -214, 13, 0, Math.PI * 2);
+          ctx.arc(22, -214, 13, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = "#0f172a";
+          ctx.beginPath();
+          ctx.arc(-2, -214, 3, 0, Math.PI * 2);
+          ctx.arc(24, -214, 3, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (isSinging) {
+          ctx.strokeStyle = "#0f172a";
+          ctx.lineWidth = 3.5;
+          ctx.beginPath();
+          ctx.arc(-4, -212, 8, Math.PI * 1.1, Math.PI * 1.9);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(22, -212, 8, Math.PI * 1.1, Math.PI * 1.9);
+          ctx.stroke();
+        } else {
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.arc(-4, -214, 7, 0, Math.PI * 2);
+          ctx.arc(22, -214, 7, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = "#0f172a";
+          ctx.beginPath();
+          ctx.arc(-2, -214, 3.5, 0, Math.PI * 2);
+          ctx.arc(24, -214, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Mouth
+        ctx.fillStyle = "#450a0a";
+        ctx.strokeStyle = "#7f1d1d";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        if (isShocked) {
+          ctx.ellipse(10, -184, 14, 22, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        } else if (isSinging) {
+          const mouthH = 12 + (AppState.currentVolume / 100) * 14;
+          ctx.ellipse(14, -190, 15, mouthH, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = "#fb7185";
+          ctx.beginPath();
+          ctx.arc(12, -184, 6, 0, Math.PI);
+          ctx.fill();
+        } else {
+          ctx.strokeStyle = "#7c2d12";
+          ctx.lineWidth = 3;
+          ctx.arc(10, -192, 8, 0.15 * Math.PI, 0.85 * Math.PI);
+          ctx.stroke();
+        }
+
+        // Iconic Horned Opera Helmet (Flies slightly up when shocked!)
+        const helmetLift = isShocked ? -18 : 0;
+        ctx.save();
+        ctx.translate(4, -234 + helmetLift);
+
+        ctx.fillStyle = "#fef3c7";
+        ctx.strokeStyle = "#b45309";
+        ctx.lineWidth = 2.5;
+
+        ctx.beginPath();
+        ctx.moveTo(-32, -4);
+        ctx.quadraticCurveTo(-72, -18, -64, -54);
+        ctx.quadraticCurveTo(-45, -24, -22, -16);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(32, -4);
+        ctx.quadraticCurveTo(72, -18, 64, -54);
+        ctx.quadraticCurveTo(45, -24, 22, -16);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        const helmGrad = ctx.createLinearGradient(-35, 0, 35, 0);
+        helmGrad.addColorStop(0, "#b45309");
+        helmGrad.addColorStop(0.5, "#fde047");
+        helmGrad.addColorStop(1, "#ca8a04");
+
+        ctx.fillStyle = helmGrad;
+        ctx.beginPath();
+        ctx.arc(0, 0, 37, Math.PI, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(-39, -5, 78, 7);
+        ctx.restore();
+
+        // Comic Startle Marks Overhead during Shatter Victory
+        if (isShocked) {
+          ctx.strokeStyle = "#facc15";
+          ctx.lineWidth = 4;
+          for (let a = -2.4; a <= -0.7; a += 0.42) {
+            const r1 = 68;
+            const r2 = 92;
+            ctx.beginPath();
+            ctx.moveTo(4 + Math.cos(a) * r1, -245 + Math.sin(a) * r1);
+            ctx.lineTo(4 + Math.cos(a) * r2, -245 + Math.sin(a) * r2);
+            ctx.stroke();
+          }
+        }
+
+        ctx.restore();
+      },
+
+      drawIntactGlass(ctx, progRatio) {
+        const stemGrad = ctx.createLinearGradient(-70, 0, 70, 0);
+        stemGrad.addColorStop(0, "rgba(148, 163, 184, 0.35)");
+        stemGrad.addColorStop(0.5, "rgba(248, 250, 252, 0.75)");
+        stemGrad.addColorStop(1, "rgba(56, 189, 248, 0.45)");
+
+        ctx.fillStyle = stemGrad;
+        ctx.strokeStyle = "rgba(226, 232, 240, 0.8)";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 72, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(-7, 0);
+        ctx.lineTo(-5, -72);
+        ctx.lineTo(5, -72);
+        ctx.lineTo(7, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.save();
+        ctx.translate(0, -60);
+
+        const bowlGrad = ctx.createLinearGradient(-90, -240, 95, -10);
+        if (progRatio >= 0.90) {
+          bowlGrad.addColorStop(0, "rgba(254, 202, 202, 0.38)");
+          bowlGrad.addColorStop(0.5, "rgba(248, 113, 113, 0.22)");
+          bowlGrad.addColorStop(1, "rgba(225, 29, 72, 0.40)");
+        } else {
+          bowlGrad.addColorStop(0, "rgba(224, 242, 254, 0.28)");
+          bowlGrad.addColorStop(0.45, "rgba(56, 189, 248, 0.12)");
+          bowlGrad.addColorStop(1, "rgba(186, 230, 253, 0.34)");
+        }
+
+        this.traceBowlPath(ctx);
+        ctx.fillStyle = bowlGrad;
+        ctx.fill();
+
+        if (progRatio > 0.01) {
+          ctx.save();
+          this.traceBowlPath(ctx);
+          ctx.clip();
+
+          for (const seg of this.crackSegments) {
+            if (progRatio <= seg.startProg) continue;
+            const segFactor = Math.min(1, (progRatio - seg.startProg) / (seg.endProg - seg.startProg));
+            const curX = seg.x1 + (seg.x2 - seg.x1) * segFactor;
+            const curY = seg.y1 + (seg.y2 - seg.y1) * segFactor;
+
+            ctx.strokeStyle = progRatio >= 0.90 ? "rgba(255, 241, 242, 0.98)" : "rgba(240, 249, 255, 0.90)";
+            ctx.lineWidth = progRatio >= 0.90 ? seg.weight * 1.35 : seg.weight;
+            ctx.shadowColor = progRatio >= 0.90 ? "#f43f5e" : "#38bdf8";
+            ctx.shadowBlur = progRatio >= 0.90 ? 12 : 5;
+
+            ctx.beginPath();
+            ctx.moveTo(seg.x1, seg.y1);
+            ctx.lineTo(curX, curY);
+            ctx.stroke();
+          }
+
+          if (progRatio >= 0.90) {
+            ctx.strokeStyle = "rgba(254, 205, 211, 0.85)";
+            ctx.lineWidth = 1.5;
+            for (let i = 0; i < 8; i++) {
+              ctx.beginPath();
+              ctx.moveTo((Math.random() - 0.5) * 120, -230 + Math.random() * 190);
+              ctx.lineTo((Math.random() - 0.5) * 120, -230 + Math.random() * 190);
+              ctx.stroke();
+            }
+          }
+          ctx.restore();
+        }
+
+        this.traceBowlPath(ctx);
+        ctx.strokeStyle = progRatio >= 0.90 ? "#fda4af" : "rgba(241, 245, 249, 0.85)";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.ellipse(0, -240, 78, 11, 0, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.12)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
+        ctx.lineWidth = 5;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(-66, -215);
+        ctx.quadraticCurveTo(-78, -125, -44, -45);
+        ctx.stroke();
+
+        ctx.restore();
+      },
+
+      drawShatteredState(ctx) {
+        ctx.fillStyle = "rgba(148, 163, 184, 0.45)";
+        ctx.strokeStyle = "rgba(226, 232, 240, 0.8)";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 72, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(-7, 0);
+        ctx.lineTo(-6, -34);
+        ctx.lineTo(-1, -24);
+        ctx.lineTo(4, -39);
+        ctx.lineTo(7, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.save();
+        ctx.translate(0, -60);
+
+        for (const sw of this.shockwaves) {
+          if (sw.alpha <= 0) continue;
+          ctx.strokeStyle = `rgba(255, 255, 255, ${sw.alpha})`;
+          ctx.lineWidth = sw.width * sw.alpha;
+          ctx.beginPath();
+          ctx.arc(0, -135, sw.r, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        for (const s of this.shards) {
+          ctx.save();
+          ctx.translate(s.x, s.y);
+          ctx.rotate(s.rot);
+          ctx.beginPath();
+          ctx.moveTo(s.pts[0].x, s.pts[0].y);
+          for (let i = 1; i < s.pts.length; i++) {
+            ctx.lineTo(s.pts[i].x, s.pts[i].y);
+          }
+          ctx.closePath();
+          ctx.fillStyle = s.glint ? "rgba(224, 242, 254, 0.78)" : "rgba(56, 189, 248, 0.42)";
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+          ctx.lineWidth = 1.5;
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+        ctx.restore();
+      }
+    };
+
+    /**
+     * ============================================================================
+     * 6. SKIN 2: ROCKET LAUNCH (Multi-Stage Atmospheric Camera & Orbit Warp)
+     * ============================================================================
+     */
+    const RocketLaunchSkin = {
+      stars: [],
+      clouds: [],
+      exhaustParticles: [],
+      time: 0,
+
+      init() {
+        this.stars = [];
+        for (let i = 0; i < 120; i++) {
+          this.stars.push({
+            x: Math.random(),
+            y: Math.random(),
+            size: 1 + Math.random() * 2.5,
+            twinkle: Math.random() * Math.PI * 2
+          });
+        }
+
+        this.clouds = [
+          { x: 0.18, y: 0.15, scale: 1.15, speed: 0.22 },
+          { x: 0.78, y: 0.38, scale: 0.90, speed: 0.28 },
+          { x: 0.32, y: 0.65, scale: 1.30, speed: 0.19 },
+          { x: 0.84, y: 0.82, scale: 1.00, speed: 0.25 }
+        ];
+      },
+
+      onReset() {
+        this.exhaustParticles = [];
+      },
+
+      onVictory() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        for (let i = 0; i < 65; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 140 + Math.random() * 380;
+          this.exhaustParticles.push({
+            x: w / 2,
+            y: h * 0.28,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            r: 4 + Math.random() * 7,
+            alpha: 1,
+            color: Math.random() > 0.4 ? "#38bdf8" : "#facc15",
+            decay: 0.85 + Math.random() * 0.5
+          });
+        }
+      },
+
+      update(dt, progRatio) {
+        this.time += dt;
+        const elev = AppState.gamePhase === "VICTORY" ? 1.0 : progRatio;
+
+        const starSpeed = (AppState.gamePhase === "VICTORY" || elev >= 0.95)
+          ? 1.65
+          : (elev > 0.55 ? (elev - 0.55) * 0.65 : 0.03);
+
+        for (const st of this.stars) {
+          st.y = (st.y + starSpeed * dt) % 1;
+        }
+
+        for (const cl of this.clouds) {
+          cl.y = (cl.y + cl.speed * (0.2 + elev * 1.6) * dt) % 1.25;
+        }
+
+        if (AppState.gamePhase === "ACTIVE" && progRatio > 0) {
+          const w = window.innerWidth;
+          const h = window.innerHeight;
+          const bottomY = h * 0.78;
+          const topY = h * 0.28;
+          const rocketY = bottomY - elev * (bottomY - topY);
+
+          const volScale = 0.55 + (AppState.currentVolume / 100) * 1.45;
+          const isGroundStage = elev <= 0.25;
+          const spawnCount = isGroundStage ? 5 : 6;
+
+          for (let i = 0; i < spawnCount; i++) {
+            const isSmoke = Math.random() > (isGroundStage ? 0.35 : 0.6);
+            const spreadX = isGroundStage
+              ? (Math.random() - 0.5) * 280
+              : (Math.random() - 0.5) * 95;
+            const vy = isGroundStage
+              ? -30 + Math.random() * 90
+              : 200 + Math.random() * 280 * volScale;
+
+            this.exhaustParticles.push({
+              x: w / 2 + (Math.random() - 0.5) * 28,
+              y: rocketY + 8,
+              vx: spreadX,
+              vy: vy,
+              r: (isSmoke ? 16 : 9) * volScale,
+              alpha: 0.95,
+              color: isSmoke
+                ? "rgba(226, 232, 240, 0.72)"
+                : (Math.random() > 0.45 ? "#f97316" : "#fef08a"),
+              decay: isSmoke ? 0.65 : 1.55
+            });
+          }
+        }
+
+        for (let i = this.exhaustParticles.length - 1; i >= 0; i--) {
+          const p = this.exhaustParticles[i];
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.r += 15 * dt;
+          p.alpha -= p.decay * dt;
+          if (p.alpha <= 0) {
+            this.exhaustParticles.splice(i, 1);
+          }
+        }
+      },
+
+      render(ctx, w, h, progRatio) {
+        this.drawRocketSkin(progRatio, ctx, w, h);
+      },
+
+      drawRocketSkin(progress, ctx = SkinManager.ctx, w = SkinManager.canvas.width, h = SkinManager.canvas.height) {
+        const elev = AppState.gamePhase === "VICTORY"
+          ? 1.0
+          : (progress > 1 ? progress / 100 : progress);
+        const centerX = w / 2;
+
+        const lerpColor = (hexA, hexB, t) => {
+          const clampT = Math.max(0, Math.min(1, t));
+          const a = parseInt(hexA.slice(1), 16);
+          const b = parseInt(hexB.slice(1), 16);
+          const r = Math.round(((a >> 16) & 255) + (((b >> 16) & 255) - ((a >> 16) & 255)) * clampT);
+          const g = Math.round(((a >> 8) & 255) + (((b >> 8) & 255) - ((a >> 8) & 255)) * clampT);
+          const bl = Math.round((a & 255) + ((b & 255) - (a & 255)) * clampT);
+          return `rgb(${r}, ${g}, ${bl})`;
+        };
+
+        // 1. Vertical Camera-Transitioning Sky/Space Backdrop
+        let topCol, botCol;
+        if (elev < 0.25) {
+          const t = elev / 0.25;
+          topCol = lerpColor("#38bdf8", "#0284c7", t);
+          botCol = lerpColor("#86efac", "#bae6fd", t);
+        } else if (elev < 0.60) {
+          const t = (elev - 0.25) / 0.35;
+          topCol = lerpColor("#0284c7", "#312e81", t);
+          botCol = lerpColor("#fde047", "#f59e0b", t);
+        } else if (elev < 0.95) {
+          const t = (elev - 0.60) / 0.35;
+          topCol = lerpColor("#312e81", "#090d16", t);
+          botCol = lerpColor("#7e22ce", "#1e1b4b", t);
+        } else {
+          topCol = "#02040a";
+          botCol = "#090d1f";
+        }
+
+        const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
+        bgGrad.addColorStop(0, topCol);
+        bgGrad.addColorStop(1, botCol);
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        // 2. Stage 3 & 4 (60% - 100%): Stars, Curving Earth Horizon, Weather Balloon & Orbiting Planets
+        if (elev >= 0.55) {
+          const starAlpha = Math.min(1, (elev - 0.55) / 0.35);
+          const isWarp = elev >= 0.95 || AppState.gamePhase === "VICTORY";
+
+          for (const st of this.stars) {
+            const sx = st.x * w;
+            const sy = st.y * h;
+            if (isWarp) {
+              ctx.strokeStyle = `rgba(186, 230, 253, ${starAlpha})`;
+              ctx.lineWidth = st.size * 1.2;
+              ctx.beginPath();
+              ctx.moveTo(sx, sy);
+              ctx.lineTo(sx, sy - 46);
+              ctx.stroke();
+            } else {
+              const tw = 0.5 + 0.5 * Math.sin(this.time * 4 + st.twinkle);
+              ctx.fillStyle = `rgba(255, 255, 255, ${starAlpha * tw})`;
+              ctx.beginPath();
+              ctx.arc(sx, sy, st.size, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        }
+
+        if (elev >= 0.58 && elev < 0.98) {
+          const stratT = (elev - 0.58) / 0.40;
+          const earthY = h + w * 1.15 + stratT * 140;
+          const earthR = w * 1.3;
+
+          ctx.save();
+          ctx.strokeStyle = "rgba(56, 189, 248, 0.45)";
+          ctx.lineWidth = 26;
+          ctx.beginPath();
+          ctx.arc(centerX, earthY, earthR, Math.PI * 1.15, Math.PI * 1.85);
+          ctx.stroke();
+
+          const earthGrad = ctx.createRadialGradient(centerX, earthY - earthR, 40, centerX, earthY, earthR);
+          earthGrad.addColorStop(0, "#2563eb");
+          earthGrad.addColorStop(0.4, "#1d4ed8");
+          earthGrad.addColorStop(1, "#0f172a");
+          ctx.fillStyle = earthGrad;
+          ctx.beginPath();
+          ctx.arc(centerX, earthY, earthR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+
+          // High-altitude Weather Balloon drifting downward
+          const balloonX = w * 0.76 + Math.sin(this.time * 2) * 18;
+          const balloonY = h * 0.15 + stratT * (h * 0.75);
+          ctx.save();
+          ctx.translate(balloonX, balloonY);
+          ctx.fillStyle = "rgba(248, 250, 252, 0.85)";
+          ctx.strokeStyle = "#94a3b8";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, 26, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(-10, 23);
+          ctx.lineTo(0, 44);
+          ctx.lineTo(10, 23);
+          ctx.stroke();
+          ctx.fillStyle = "#f59e0b";
+          ctx.fillRect(-7, 44, 14, 10);
+          ctx.restore();
+        }
+
+        if (elev >= 0.92) {
+          const spaceAlpha = Math.min(1, (elev - 0.92) / 0.08);
+          ctx.save();
+          ctx.globalAlpha = spaceAlpha;
+
+          const px = w * 0.80;
+          const py = h * 0.22;
+          const pGrad = ctx.createRadialGradient(px - 18, py - 18, 8, px, py, 55);
+          pGrad.addColorStop(0, "#f472b6");
+          pGrad.addColorStop(1, "#581c87");
+          ctx.fillStyle = pGrad;
+          ctx.beginPath();
+          ctx.arc(px, py, 52, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = "rgba(253, 224, 71, 0.75)";
+          ctx.lineWidth = 8;
+          ctx.beginPath();
+          ctx.ellipse(px, py, 98, 20, -0.3, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Animated Passing Satellite
+          const satX = ((this.time * 110) % (w + 200)) - 100;
+          const satY = h * 0.18 + Math.sin(this.time * 1.8) * 35;
+          ctx.translate(satX, satY);
+          ctx.rotate(0.25);
+          ctx.fillStyle = "#38bdf8";
+          ctx.strokeStyle = "#e2e8f0";
+          ctx.lineWidth = 2;
+          ctx.fillRect(-48, -10, 28, 20);
+          ctx.strokeRect(-48, -10, 28, 20);
+          ctx.fillRect(20, -10, 28, 20);
+          ctx.strokeRect(20, -10, 28, 20);
+          ctx.fillStyle = "#cbd5e1";
+          ctx.fillRect(-14, -14, 28, 28);
+          ctx.fillStyle = Math.sin(this.time * 10) > 0 ? "#ef4444" : "#facc15";
+          ctx.beginPath();
+          ctx.arc(0, 22, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // 3. Stage 2 (20% - 65% Atmosphere): Fluffy Clouds, Fleeing Birds & Airliner
+        if (elev >= 0.18 && elev <= 0.68) {
+          const atmoAlpha = elev < 0.25
+            ? (elev - 0.18) / 0.07
+            : (elev > 0.58 ? 1 - (elev - 0.58) / 0.10 : 1);
+
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, Math.min(1, atmoAlpha));
+
+          for (const cl of this.clouds) {
+            const cx = cl.x * w;
+            const cy = (cl.y - 0.15) * h;
+            const sc = cl.scale;
+            ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+            ctx.beginPath();
+            ctx.arc(cx, cy, 36 * sc, 0, Math.PI * 2);
+            ctx.arc(cx + 28 * sc, cy - 10 * sc, 28 * sc, 0, Math.PI * 2);
+            ctx.arc(cx + 54 * sc, cy + 4 * sc, 24 * sc, 0, Math.PI * 2);
+            ctx.arc(cx - 28 * sc, cy + 6 * sc, 24 * sc, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          const birdProgress = ((elev - 0.20) / 0.40);
+          const birdBaseY = h * 0.22 + birdProgress * (h * 0.65);
+          ctx.strokeStyle = "#1e293b";
+          ctx.lineWidth = 3;
+          for (let b = 0; b < 4; b++) {
+            const bx = centerX - 180 - b * 34 - (this.time * 18 % 60);
+            const by = birdBaseY + b * 18;
+            const flap = Math.sin(this.time * 16 + b) * 8;
+            ctx.beginPath();
+            ctx.moveTo(bx - 12, by - flap);
+            ctx.quadraticCurveTo(bx - 5, by - 6, bx, by);
+            ctx.quadraticCurveTo(bx + 5, by - 6, bx + 12, by - flap);
+            ctx.stroke();
+          }
+
+          const planeX = w * 0.82 - birdProgress * (w * 0.55);
+          const planeY = h * 0.18 + birdProgress * (h * 0.58);
+          ctx.save();
+          ctx.translate(planeX, planeY);
+          ctx.fillStyle = "#f8fafc";
+          ctx.strokeStyle = "#475569";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 44, 9, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = "#ef4444";
+          ctx.beginPath();
+          ctx.moveTo(30, -4);
+          ctx.lineTo(44, -22);
+          ctx.lineTo(42, -2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = "#cbd5e1";
+          ctx.beginPath();
+          ctx.moveTo(-6, 2);
+          ctx.lineTo(14, 18);
+          ctx.lineTo(24, 18);
+          ctx.lineTo(8, 2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+
+          ctx.restore();
+        }
+
+        // 4. Stage 1 (0% - 25% Ground): Mountains, Pine Trees, Launchpad & Left Gantry
+        if (elev <= 0.32) {
+          const groundOffset = (elev / 0.25) * (h * 0.52);
+          const groundY = h * 0.80 + groundOffset;
+
+          ctx.fillStyle = "#334155";
+          ctx.beginPath();
+          ctx.moveTo(0, groundY);
+          ctx.lineTo(w * 0.18, groundY - 150);
+          ctx.lineTo(w * 0.35, groundY - 65);
+          ctx.lineTo(w * 0.58, groundY - 195);
+          ctx.lineTo(w * 0.78, groundY - 80);
+          ctx.lineTo(w * 0.92, groundY - 140);
+          ctx.lineTo(w, groundY - 50);
+          ctx.lineTo(w, groundY);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.fillStyle = "#15803d";
+          ctx.fillRect(0, groundY, w, h - groundY + 300);
+
+          const treePositions = [0.08, 0.14, 0.22, 0.76, 0.83, 0.90];
+          treePositions.forEach((txRatio, idx) => {
+            const tx = w * txRatio;
+            const th = 48 + (idx % 2) * 16;
+            ctx.fillStyle = "#78350f";
+            ctx.fillRect(tx - 4, groundY - 12, 8, 12);
+            ctx.fillStyle = "#166534";
+            ctx.beginPath();
+            ctx.moveTo(tx, groundY - th);
+            ctx.lineTo(tx - 20, groundY - 10);
+            ctx.lineTo(tx + 20, groundY - 10);
+            ctx.closePath();
+            ctx.fill();
+          });
+
+          ctx.fillStyle = "#475569";
+          ctx.strokeStyle = "#94a3b8";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.roundRect(centerX - 160, groundY - 20, 320, 26, 6);
+          ctx.fill();
+          ctx.stroke();
+
+          const gantryX = centerX - 128;
+          ctx.strokeStyle = "#dc2626";
+          ctx.lineWidth = 4;
+          ctx.strokeRect(gantryX, groundY - 240, 42, 220);
+          ctx.beginPath();
+          for (let gy = groundY - 240; gy < groundY - 25; gy += 36) {
+            ctx.moveTo(gantryX, gy);
+            ctx.lineTo(gantryX + 42, gy + 36);
+            ctx.moveTo(gantryX + 42, gy);
+            ctx.lineTo(gantryX, gy + 36);
+          }
+          const armSwing = Math.min(1, elev / 0.12) * 38;
+          ctx.moveTo(gantryX + 42, groundY - 155);
+          ctx.lineTo(centerX - 36 - armSwing, groundY - 155 - armSwing * 0.4);
+          ctx.stroke();
+        }
+
+        // 5. Render Exhaust & Fire Plume Particles
+        for (const p of this.exhaustParticles) {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, p.alpha);
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // 6. Position & Render Classic Red/White Retro Rocket
+        const bottomY = h * 0.78;
+        const topY = h * 0.28;
+        const rocketY = AppState.gamePhase === "VICTORY"
+          ? topY + Math.sin(this.time * 4.5) * 10
+          : bottomY - elev * (bottomY - topY);
+
+        let jitterX = 0, jitterY = 0;
+        if (AppState.gamePhase === "ACTIVE" && elev > 0) {
+          const shakeAmp = elev <= 0.25 ? 4.5 : 2.2;
+          jitterX = (Math.random() - 0.5) * shakeAmp * 2;
+          jitterY = (Math.random() - 0.5) * shakeAmp;
+        }
+
+        ctx.save();
+        ctx.translate(centerX + jitterX, rocketY + jitterY);
+
+        if (elev > 0 || AppState.gamePhase === "VICTORY") {
+          const volScale = 0.6 + (AppState.currentVolume / 100) * 1.25;
+          const flameLen = (62 + Math.random() * 40) * volScale;
+
+          const flameGrad = ctx.createLinearGradient(0, 0, 0, flameLen);
+          flameGrad.addColorStop(0, "#ffffff");
+          flameGrad.addColorStop(0.28, "#fef08a");
+          flameGrad.addColorStop(0.68, "#f97316");
+          flameGrad.addColorStop(1, "rgba(239, 68, 68, 0)");
+
+          ctx.fillStyle = flameGrad;
+          ctx.beginPath();
+          ctx.moveTo(-24, 0);
+          ctx.quadraticCurveTo(0, flameLen * 1.25, 0, flameLen);
+          ctx.quadraticCurveTo(0, flameLen * 1.25, 24, 0);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        this.drawRocketBody(ctx);
+        ctx.restore();
+
+        StageHUD.drawMeter(ctx, w, h, elev, "ALTITUDE & THRUST");
+        StageHUD.drawVictoryBanner(ctx, w, h, "LIFT OFF! ORBIT ACHIEVED!", "#38bdf8");
+      },
+
+      drawRocketBody(ctx) {
+        ctx.fillStyle = "#dc2626";
+        ctx.strokeStyle = "#f8fafc";
+        ctx.lineWidth = 2.5;
+
+        ctx.beginPath();
+        ctx.moveTo(-26, -48);
+        ctx.lineTo(-64, 14);
+        ctx.lineTo(-22, -8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(26, -48);
+        ctx.lineTo(64, 14);
+        ctx.lineTo(22, -8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#334155";
+        ctx.beginPath();
+        ctx.moveTo(-18, -10);
+        ctx.lineTo(-25, 7);
+        ctx.lineTo(25, 7);
+        ctx.lineTo(18, -10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        const hullGrad = ctx.createLinearGradient(-38, 0, 38, 0);
+        hullGrad.addColorStop(0, "#cbd5e1");
+        hullGrad.addColorStop(0.45, "#ffffff");
+        hullGrad.addColorStop(1, "#94a3b8");
+
+        ctx.fillStyle = hullGrad;
+        ctx.beginPath();
+        ctx.moveTo(-26, -10);
+        ctx.bezierCurveTo(-44, -90, -38, -165, 0, -215);
+        ctx.bezierCurveTo(38, -165, 44, -90, 26, -10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(-50, -220, 100, 64);
+        ctx.clip();
+        ctx.fillStyle = "#dc2626";
+        ctx.beginPath();
+        ctx.moveTo(-26, -10);
+        ctx.bezierCurveTo(-44, -90, -38, -165, 0, -215);
+        ctx.bezierCurveTo(38, -165, 44, -90, 26, -10);
+        ctx.fill();
+        ctx.restore();
+
+        ctx.fillStyle = "#0284c7";
+        ctx.strokeStyle = "#e2e8f0";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(0, -115, 18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+        ctx.beginPath();
+        ctx.arc(-6, -121, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+
+    /**
+     * ============================================================================
+     * 7. SKIN 3: MONSTER LASER (Underground Cave, Big-Nosed Beast & Cosmic Vortex)
+     * ============================================================================
+     */
+    const MonsterLaserSkin = {
+      sparks: [],
+      time: 0,
+      creepOffset: 0,
+
+      init() {
+        this.sparks = [];
+      },
+
+      onReset() {
+        this.sparks = [];
+        this.creepOffset = 0;
+      },
+
+      onVictory() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const portalX = w * 0.83;
+        const portalY = h * 0.78 - 135;
+
+        for (let i = 0; i < 85; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 100 + Math.random() * 360;
+          this.sparks.push({
+            x: portalX,
+            y: portalY,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            r: 4 + Math.random() * 7,
+            alpha: 1,
+            color: ["#a855f7", "#38bdf8", "#22c55e", "#facc15"][i % 4]
+          });
+        }
+      },
+
+      update(dt, progRatio) {
+        this.time += dt;
+
+        if (AppState.gamePhase === "ACTIVE") {
+          if (progRatio <= 0.005) {
+            this.creepOffset = Math.min(240, this.creepOffset + 26 * dt);
+          } else if (AppState.isGateOpen) {
+            this.creepOffset = Math.max(0, this.creepOffset - 120 * dt);
+          }
+        }
+
+        if (AppState.gamePhase === "ACTIVE" && progRatio > 0) {
+          const w = window.innerWidth;
+          const h = window.innerHeight;
+          const monsterX = this.getMonsterX(w, progRatio);
+          const impactX = monsterX - 88;
+          const impactY = h * 0.78 - 125;
+
+          const volNorm = AppState.currentVolume / 100;
+          const sparkCount = 3 + Math.floor(volNorm * 8);
+          for (let i = 0; i < sparkCount; i++) {
+            const angle = Math.PI + (Math.random() - 0.5) * 2.5;
+            const speed = 180 + Math.random() * 340 * (0.6 + volNorm);
+            this.sparks.push({
+              x: impactX,
+              y: impactY + (Math.random() - 0.5) * 36,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed - 70,
+              r: 3 + Math.random() * 5.5,
+              alpha: 1,
+              color: ["#22d3ee", "#f472b6", "#facc15", "#a855f7"][Math.floor(Math.random() * 4)]
+            });
+          }
+        }
+
+        for (let i = this.sparks.length - 1; i >= 0; i--) {
+          const sp = this.sparks[i];
+          sp.x += sp.vx * dt;
+          sp.y += sp.vy * dt;
+          sp.alpha -= 1.85 * dt;
+          if (sp.alpha <= 0) {
+            this.sparks.splice(i, 1);
+          }
+        }
+      },
+
+      getMonsterX(w, progRatio) {
+        const stompLurch = progRatio <= 0.005 ? Math.sin(this.time * 4.5) * 8 : 0;
+        const baseStart = w * 0.58 - this.creepOffset + stompLurch;
+        const rightEdge = w * 0.83;
+        return baseStart + progRatio * (rightEdge - baseStart);
+      },
+
+      render(ctx, w, h, progRatio) {
+        this.drawMonsterSkin(progRatio, ctx, w, h);
+      },
+
+      drawMonsterSkin(progress, ctx = SkinManager.ctx, w = SkinManager.canvas.width, h = SkinManager.canvas.height) {
+        const progRatio = AppState.gamePhase === "VICTORY"
+          ? 1.0
+          : (progress > 1 ? progress / 100 : progress);
+
+        const floorY = h * 0.78;
+        const emitterX = w * 0.11;
+        const emitterY = floorY - 120;
+        const monsterX = this.getMonsterX(w, progRatio);
+        const portalX = w * 0.83;
+        const portalY = floorY - 135;
+
+        // 1. Underground Ruined Cavern Backdrop
+        const caveGrad = ctx.createLinearGradient(0, 0, 0, h);
+        caveGrad.addColorStop(0, "#060811");
+        caveGrad.addColorStop(0.55, "#151126");
+        caveGrad.addColorStop(1, "#271430");
+        ctx.fillStyle = caveGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        // Ceiling Stalactites
+        ctx.fillStyle = "#0c0a18";
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        const spikes = 14;
+        for (let i = 0; i <= spikes; i++) {
+          const sx = (i / spikes) * w;
+          const sy = (i % 2 === 0) ? 45 + (i % 3) * 28 : 115 + ((i * 17) % 55);
+          ctx.lineTo(sx, sy);
+        }
+        ctx.lineTo(w, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        // Ruined Arena Stone Pillars & Glowing Cave Crystals in Background
+        const pillarPositions = [0.24, 0.48, 0.70];
+        pillarPositions.forEach((pxRatio, idx) => {
+          const px = w * pxRatio;
+          const ph = 180 + (idx % 2) * 75;
+          ctx.fillStyle = "#1e1b2e";
+          ctx.strokeStyle = "#332d4b";
+          ctx.lineWidth = 2;
+          ctx.fillRect(px - 26, floorY - ph, 52, ph);
+          ctx.strokeRect(px - 26, floorY - ph, 52, ph);
+
+          ctx.fillStyle = idx % 2 === 0 ? "rgba(56, 189, 248, 0.35)" : "rgba(168, 85, 247, 0.35)";
+          ctx.beginPath();
+          ctx.moveTo(px + 28, floorY);
+          ctx.lineTo(px + 42, floorY - 48);
+          ctx.lineTo(px + 54, floorY);
+          ctx.closePath();
+          ctx.fill();
+        });
+
+        // Cavern Rock Floor & Glowing Fault Line
+        ctx.fillStyle = "#0a0812";
+        ctx.fillRect(0, floorY, w, h - floorY);
+
+        ctx.strokeStyle = "#a855f7";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, floorY);
+        ctx.lineTo(w, floorY);
+        ctx.stroke();
+
+        // 2. Swirling Cosmic Vortex Behind Monster
+        if (progRatio >= 0.65 || AppState.gamePhase === "VICTORY") {
+          const vortexFactor = AppState.gamePhase === "VICTORY"
+            ? 1.35
+            : (progRatio - 0.65) / 0.35;
+
+          ctx.save();
+          ctx.translate(portalX, portalY);
+          ctx.rotate(this.time * 4.2);
+
+          const vGrad = ctx.createRadialGradient(0, 0, 5, 0, 0, 145 * vortexFactor);
+          vGrad.addColorStop(0, "#ffffff");
+          vGrad.addColorStop(0.35, "#38bdf8");
+          vGrad.addColorStop(0.7, "#a855f7");
+          vGrad.addColorStop(1, "rgba(88, 28, 135, 0)");
+
+          ctx.fillStyle = vGrad;
+          ctx.beginPath();
+          ctx.arc(0, 0, 145 * vortexFactor, 0, Math.PI * 2);
+          ctx.fill();
+
+          for (let arm = 0; arm < 4; arm++) {
+            ctx.strokeStyle = arm % 2 === 0 ? "#22d3ee" : "#f472b6";
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            for (let t = 0; t < 28; t++) {
+              const r = (t / 28) * 130 * vortexFactor;
+              const a = arm * (Math.PI / 2) + t * 0.22;
+              const vx = Math.cos(a) * r;
+              const vy = Math.sin(a) * r;
+              if (t === 0) ctx.moveTo(vx, vy);
+              else ctx.lineTo(vx, vy);
+            }
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        // 3. Laser Emitter Cannon on Far Left
+        this.drawSonicCannon(ctx, emitterX, floorY, emitterY, progRatio);
+
+        // 4. Render Grumpy Big-Nosed Cartoon Monster
+        ctx.save();
+        if (AppState.gamePhase === "VICTORY") {
+          const suckProgress = Math.max(0, (AppState.victoryTimer - 1.2) / 1.8);
+          ctx.translate(portalX, portalY);
+          ctx.rotate((1 - suckProgress) * 14);
+          ctx.scale(suckProgress, suckProgress);
+          ctx.globalAlpha = suckProgress;
+          this.drawMonsterCharacter(ctx, 0, 135, true, true, 1.0);
+        } else {
+          const isBlasted = progRatio > 0;
+          const pushJitter = (isBlasted && AppState.isGateOpen) ? (Math.random() - 0.5) * 12 : 0;
+          const stompBob = !isBlasted ? Math.abs(Math.sin(this.time * 4.5)) * 14 : 0;
+          ctx.translate(monsterX + pushJitter, floorY - stompBob);
+          this.drawMonsterCharacter(ctx, 0, 0, isBlasted, false, progRatio);
+        }
+        ctx.restore();
+
+        // 5. Multi-Color Neon Sonic Laser Beam (Active when progress > 0%)
+        if (AppState.gamePhase === "ACTIVE" && progRatio > 0) {
+          const startX = emitterX + 48;
+          const impactX = monsterX - 88;
+          const volScale = 0.55 + (AppState.currentVolume / 100) * 1.35;
+          const beamThickness = (14 + progRatio * 26) * volScale;
+
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          ctx.lineCap = "round";
+
+          ctx.strokeStyle = "rgba(236, 72, 153, 0.45)";
+          ctx.lineWidth = beamThickness * 2.1;
+          ctx.beginPath();
+          ctx.moveTo(startX, emitterY);
+          ctx.lineTo(impactX, emitterY);
+          ctx.stroke();
+
+          const colors = ["#22d3ee", "#facc15", "#a855f7"];
+          colors.forEach((col, idx) => {
+            ctx.strokeStyle = col;
+            ctx.lineWidth = 4 + volScale * 2;
+            ctx.beginPath();
+            const freq = 0.045 + idx * 0.015;
+            const phase = this.time * (26 + idx * 7) + idx * 2;
+            const amp = beamThickness * (0.55 + idx * 0.2);
+
+            for (let x = startX; x <= impactX; x += 10) {
+              const wy = emitterY + Math.sin(x * freq - phase) * amp;
+              if (x === startX) ctx.moveTo(x, wy);
+              else ctx.lineTo(x, wy);
+            }
+            ctx.stroke();
+          });
+
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = beamThickness * 0.45;
+          ctx.beginPath();
+          ctx.moveTo(startX, emitterY);
+          ctx.lineTo(impactX, emitterY);
+          ctx.stroke();
+
+          const shockR = beamThickness * 0.85 + Math.random() * 12;
+          const shockGrad = ctx.createRadialGradient(impactX, emitterY, 2, impactX, emitterY, shockR);
+          shockGrad.addColorStop(0, "#ffffff");
+          shockGrad.addColorStop(0.5, "#22d3ee");
+          shockGrad.addColorStop(1, "rgba(236, 72, 153, 0)");
+          ctx.fillStyle = shockGrad;
+          ctx.beginPath();
+          ctx.arc(impactX, emitterY, shockR, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.restore();
+        }
+
+        // 6. Render Impact & Disintegration Sparks
+        for (const sp of this.sparks) {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, sp.alpha);
+          ctx.fillStyle = sp.color;
+          ctx.beginPath();
+          ctx.arc(sp.x, sp.y, sp.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        StageHUD.drawMeter(ctx, w, h, progRatio, "SONIC LASER POWER");
+        StageHUD.drawVictoryBanner(ctx, w, h, "MONSTER BANISHED!", "#a855f7");
+      },
+
+      drawSonicCannon(ctx, x, floorY, emitterY, progRatio) {
+        ctx.save();
+        ctx.fillStyle = "#1e293b";
+        ctx.strokeStyle = "#475569";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(x - 46, floorY - 82, 92, 82, 10);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#0f172a";
+        ctx.strokeStyle = progRatio > 0 ? "#22d3ee" : "#64748b";
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.roundRect(x - 32, emitterY - 28, 78, 56, 12);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = progRatio > 0 ? "#ec4899" : "#475569";
+        ctx.beginPath();
+        ctx.ellipse(x + 48, emitterY, 11, 32, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      },
+
+      drawMonsterCharacter(ctx, ox, oy, isBlasted, isDizzy, progRatio) {
+        ctx.save();
+        ctx.translate(ox, oy);
+
+        const step = Math.sin(this.time * 4.5) * 16;
+        ctx.fillStyle = "#3b0764";
+        ctx.strokeStyle = "#c084fc";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(-44 + (isBlasted ? 14 : step), -14, 30, 15, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.ellipse(44 - (isBlasted ? 14 : step), -14, 30, 15, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Flailing Arms
+        ctx.strokeStyle = "#581c87";
+        ctx.lineWidth = 22;
+        ctx.lineCap = "round";
+        const flailA = isBlasted ? Math.sin(this.time * 28) * 38 : Math.sin(this.time * 4.5) * 10;
+        const flailB = isBlasted ? Math.cos(this.time * 32) * 38 : -Math.sin(this.time * 4.5) * 10;
+
+        ctx.beginPath();
+        if (isBlasted) {
+          ctx.moveTo(-58, -135);
+          ctx.quadraticCurveTo(-115, -185 + flailA, -95, -230 + flailB);
+          ctx.moveTo(58, -135);
+          ctx.quadraticCurveTo(118, -185 + flailB, 102, -230 + flailA);
+        } else {
+          ctx.moveTo(-62, -130);
+          ctx.quadraticCurveTo(-105, -110 + flailA, -88, -75);
+          ctx.moveTo(62, -130);
+          ctx.quadraticCurveTo(95, -110 + flailB, 78, -75);
+        }
+        ctx.stroke();
+
+        // Curved Beast Horns
+        ctx.fillStyle = "#facc15";
+        ctx.strokeStyle = "#ca8a04";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-52, -195);
+        ctx.quadraticCurveTo(-102, -242, -48, -256);
+        ctx.quadraticCurveTo(-40, -218, -24, -205);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(52, -195);
+        ctx.quadraticCurveTo(102, -242, 48, -256);
+        ctx.quadraticCurveTo(40, -218, 24, -205);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Hulking Shaggy Body
+        const bodyGrad = ctx.createRadialGradient(-20, -135, 18, 0, -115, 130);
+        if (isBlasted) {
+          bodyGrad.addColorStop(0, "#f43f5e");
+          bodyGrad.addColorStop(1, "#581c87");
+        } else {
+          bodyGrad.addColorStop(0, "#7c3aed");
+          bodyGrad.addColorStop(1, "#2e1065");
+        }
+
+        ctx.fillStyle = bodyGrad;
+        ctx.strokeStyle = "#d8b4fe";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-86, -24);
+        ctx.bezierCurveTo(-110, -145, -78, -225, 0, -225);
+        ctx.bezierCurveTo(78, -225, 110, -145, 86, -24);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Eyes (Pair of Expressive Cartoon Eyes — Spiral when Dizzy at 100%)
+        const eyePositions = [-34, 14];
+        eyePositions.forEach(ex => {
+          ctx.fillStyle = "#ffffff";
+          ctx.strokeStyle = "#0f172a";
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(ex, -162, 20, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          if (isDizzy || progRatio >= 0.95) {
+            ctx.save();
+            ctx.translate(ex, -162);
+            ctx.rotate(this.time * 12);
+            ctx.strokeStyle = "#ef4444";
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            for (let a = 0; a < Math.PI * 4; a += 0.3) {
+              const r = (a / (Math.PI * 4)) * 16;
+              const sx = Math.cos(a) * r;
+              const sy = Math.sin(a) * r;
+              if (a === 0) ctx.moveTo(sx, sy);
+              else ctx.lineTo(sx, sy);
+            }
+            ctx.stroke();
+            ctx.restore();
+          } else {
+            ctx.fillStyle = isBlasted ? "#ef4444" : "#090d16";
+            ctx.beginPath();
+            ctx.arc(ex - 5, -162, isBlasted ? 6 : 9, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+
+        // Heavy Furrowed Unibrow
+        ctx.strokeStyle = "#1e1b4b";
+        ctx.lineWidth = 9;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        if (isBlasted) {
+          ctx.moveTo(-58, -188);
+          ctx.lineTo(-10, -176);
+          ctx.lineTo(38, -188);
+        } else {
+          ctx.moveTo(-56, -184);
+          ctx.lineTo(-10, -168);
+          ctx.lineTo(36, -184);
+        }
+        ctx.stroke();
+
+        // Giant Bulbous Cartoon Nose
+        const noseGrad = ctx.createRadialGradient(-34, -132, 4, -26, -126, 36);
+        noseGrad.addColorStop(0, "#fb7185");
+        noseGrad.addColorStop(1, "#be123c");
+        ctx.fillStyle = noseGrad;
+        ctx.strokeStyle = "#4c0519";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(-28, -126, 32, 22, -0.15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#4c0519";
+        ctx.beginPath();
+        ctx.ellipse(-42, -118, 5, 3, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Grumpy Underbite Mouth & Fangs
+        ctx.fillStyle = "#090d16";
+        ctx.strokeStyle = "#c4b5fd";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        if (isBlasted) {
+          ctx.ellipse(-12, -68, 36, 24, 0, 0, Math.PI * 2);
+        } else {
+          ctx.roundRect(-52, -78, 80, 24, 8);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#f8fafc";
+        ctx.beginPath();
+        ctx.moveTo(-36, -78);
+        ctx.lineTo(-28, -62);
+        ctx.lineTo(-20, -78);
+        ctx.moveTo(4, -78);
+        ctx.lineTo(12, -62);
+        ctx.lineTo(20, -78);
+        ctx.fill();
+
+        ctx.restore();
+      }
+    };
+
+    /**
+     * ============================================================================
+     * 8. UNIFIED SKIN ROUTER (Manages Canvas Sizing & Active Mode Delegation)
+     * ============================================================================
+     */
+    const SkinManager = {
+      canvas: null,
+      ctx: null,
+      skins: {
+        GLASS: GlassBreakerSkin,
+        ROCKET: RocketLaunchSkin,
+        MONSTER: MonsterLaserSkin
+      },
+
+      init(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext("2d");
+        this.resize();
+        window.addEventListener("resize", () => this.resize());
+
+        Object.values(this.skins).forEach(skin => skin.init());
+      },
+
+      resize() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+      },
+
+      getActiveSkin() {
+        return this.skins[AppState.gameMode];
+      },
+
+      onVictory() {
+        this.getActiveSkin().onVictory();
+      },
+
+      onReset() {
+        this.getActiveSkin().onReset();
+      },
+
+      update(dt) {
+        const progRatio = AppState.progress / 100;
+        this.getActiveSkin().update(dt, progRatio);
+      },
+
+      render() {
+        const progRatio = AppState.progress / 100;
+        this.getActiveSkin().render(this.ctx, this.canvas.width, this.canvas.height, progRatio);
+      }
+    };
+
+    /**
+     * ============================================================================
+     * 9. MASTER GAME TIMING LOOP (Delta-Time Sustain & Auto-Reset)
+     * ============================================================================
+     */
+    const GameEngine = {
+      lastTimestamp: 0,
+
+      startLoop() {
+        this.lastTimestamp = performance.now();
+        requestAnimationFrame((ts) => this.tick(ts));
+      },
+
+      tick(timestamp) {
+        const dt = Math.min(0.1, (timestamp - this.lastTimestamp) / 1000);
+        this.lastTimestamp = timestamp;
+
+        // 1. Sample microphone and evaluate gate
+        AudioEngine.sampleAudio();
+
+        // 2. Advance Sustain / Decay / Victory state machine
+        if (AppState.gamePhase === "ACTIVE") {
+          if (AppState.isGateOpen) {
+            const fillRate = 100 / AppState.sustainDuration;
+            AppState.progress = Math.min(100, AppState.progress + fillRate * dt);
+
+            if (AppState.progress >= 100) {
+              AppState.progress = 100;
+              AppState.gamePhase = "VICTORY";
+              AppState.victoryTimer = AppState.RESET_DELAY;
+              SkinManager.onVictory();
+              AudioEngine.playVictorySound(AppState.gameMode);
+            }
+          } else if (AppState.progress > 0) {
+            AppState.progress = Math.max(0, AppState.progress - AppState.decaySpeed * dt);
+          }
+        } else if (AppState.gamePhase === "VICTORY") {
+          AppState.victoryTimer -= dt;
+          if (AppState.victoryTimer <= 0) {
+            AppState.gamePhase = "ACTIVE";
+            AppState.progress = 0;
+            AppState.victoryTimer = 0;
+            SkinManager.onReset();
+          }
+        }
+
+        // 3. Update active skin physics and render
+        SkinManager.update(dt);
+        SkinManager.render();
+        UIController.render();
+
+        requestAnimationFrame((ts) => this.tick(ts));
+      }
+    };
+
+    /**
+     * ============================================================================
+     * 10. UI, PRESETS & DIAGNOSTIC DRAWER CONTROLLER
+     * ============================================================================
+     */
+    const UIController = {
+      els: {},
+      pitchCtx: null,
+      volCtx: null,
+      toastTimer: null,
+
+      init() {
+        this.els = {
+          errorToast: document.getElementById("error-toast"),
+          btnMic: document.getElementById("btn-mic"),
+          btnDrawerToggle: document.getElementById("btn-drawer-toggle"),
+          btnFullscreen: document.getElementById("btn-fullscreen"),
+          controlDrawer: document.getElementById("control-drawer"),
+          modeBtns: document.querySelectorAll(".mode-btn"),
+          presetBtns: document.querySelectorAll(".preset-btn"),
+          hudTarget: document.getElementById("hud-target"),
+          hudNote: document.getElementById("hud-note"),
+          hudGateDot: document.getElementById("hud-gate-dot"),
+          hudProgress: document.getElementById("hud-progress"),
+          readoutNote: document.getElementById("readout-note"),
+          readoutHz: document.getElementById("readout-hz"),
+          readoutCents: document.getElementById("readout-cents"),
+          readoutVol: document.getElementById("readout-vol"),
+          labelTargetReminder: document.getElementById("label-target-reminder"),
+          statusBeacon: document.getElementById("status-beacon"),
+          beaconText: document.getElementById("beacon-text"),
+          beaconSubtext: document.getElementById("beacon-subtext"),
+          selectTarget: document.getElementById("select-target"),
+          btnNoteDown: document.getElementById("btn-note-down"),
+          btnNoteUp: document.getElementById("btn-note-up"),
+          valTargetHz: document.getElementById("val-target-hz"),
+          toggleOctaveFree: document.getElementById("toggle-octave-free"),
+          sliderTolerance: document.getElementById("slider-tolerance"),
+          valTolerance: document.getElementById("val-tolerance"),
+          sliderVolFloor: document.getElementById("slider-vol-floor"),
+          valVolFloor: document.getElementById("val-vol-floor"),
+          sliderSustain: document.getElementById("slider-sustain"),
+          valSustain: document.getElementById("val-sustain"),
+          sliderDecay: document.getElementById("slider-decay"),
+          valDecay: document.getElementById("val-decay"),
+          canvasPitch: document.getElementById("canvas-pitch"),
+          canvasVolume: document.getElementById("canvas-volume")
+        };
+
+        this.pitchCtx = this.els.canvasPitch.getContext("2d");
+        this.volCtx = this.els.canvasVolume.getContext("2d");
+
+        this.populateTargetDropdown();
+        this.bindEvents();
+        this.updateControlLabels();
+      },
+
+      showError(msg) {
+        this.els.errorToast.textContent = msg;
+        this.els.errorToast.style.display = "block";
+        if (this.toastTimer) clearTimeout(this.toastTimer);
+        this.toastTimer = setTimeout(() => {
+          this.els.errorToast.style.display = "none";
+        }, 5000);
+      },
+
+      populateTargetDropdown() {
+        this.els.selectTarget.innerHTML = "";
+        for (let midi = MIN_TARGET_MIDI; midi <= MAX_TARGET_MIDI; midi++) {
+          const opt = document.createElement("option");
+          const name = midiToNoteName(midi);
+          const hz = midiToFreq(midi).toFixed(1);
+          opt.value = midi;
+          opt.textContent = `${name} (${hz} Hz)`;
+          if (midi === AppState.targetMidi) opt.selected = true;
+          this.els.selectTarget.appendChild(opt);
+        }
+      },
+
+      applyPreset(presetKey) {
+        const preset = REHEARSAL_PRESETS[presetKey];
+        if (!preset) return;
+
+        AppState.activePreset = presetKey;
+        AppState.pitchTolerance = preset.tolerance;
+        AppState.volumeFloor = preset.volumeFloor;
+        AppState.sustainDuration = preset.sustain;
+        AppState.decaySpeed = preset.decay;
+
+        this.els.sliderTolerance.value = preset.tolerance;
+        this.els.sliderVolFloor.value = preset.volumeFloor;
+        this.els.sliderSustain.value = preset.sustain;
+        this.els.sliderDecay.value = preset.decay;
+
+        evaluateGateState();
+        this.updateControlLabels();
+      },
+
+      clearActivePreset() {
+        AppState.activePreset = null;
+        this.els.presetBtns.forEach(btn => btn.classList.remove("active"));
+      },
+
+      bindEvents() {
+        // Microphone Toggle
+        this.els.btnMic.addEventListener("click", async () => {
+          try {
+            if (!AppState.isListening) {
+              await AudioEngine.start();
+              this.els.btnMic.textContent = "Stop Microphone";
+              this.els.btnMic.classList.add("active");
+            } else {
+              await AudioEngine.stop();
+              this.els.btnMic.textContent = "Start Microphone";
+              this.els.btnMic.classList.remove("active");
+            }
+          } catch (err) {
+            this.showError("Microphone access denied or unavailable: " + err.message);
+          }
+        });
+
+        // Instant Game Mode Switching without stopping AudioContext
+        this.els.modeBtns.forEach(btn => {
+          btn.addEventListener("click", () => {
+            const newMode = btn.getAttribute("data-mode");
+            if (newMode === AppState.gameMode) return;
+            AppState.gameMode = newMode;
+            this.els.modeBtns.forEach(b => b.classList.toggle("active", b === btn));
+
+            if (AppState.gamePhase === "VICTORY") {
+              AppState.gamePhase = "ACTIVE";
+              AppState.progress = 0;
+              SkinManager.onReset();
+            }
+          });
+        });
+
+        // Quick Rehearsal Presets
+        this.els.presetBtns.forEach(btn => {
+          btn.addEventListener("click", () => {
+            const key = btn.getAttribute("data-preset");
+            this.applyPreset(key);
+            this.els.presetBtns.forEach(b => b.classList.toggle("active", b === btn));
+          });
+        });
+
+        // Collapsible Control Drawer
+        this.els.btnDrawerToggle.addEventListener("click", () => {
+          AppState.isDrawerCollapsed = !AppState.isDrawerCollapsed;
+          this.els.controlDrawer.classList.toggle("collapsed", AppState.isDrawerCollapsed);
+          this.els.btnDrawerToggle.innerHTML = AppState.isDrawerCollapsed
+            ? "Show Controls &blacktriangledown;"
+            : "Hide Controls &blacktriangle;";
+        });
+
+        // Projector Fullscreen Toggle
+        this.els.btnFullscreen.addEventListener("click", () => {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => {});
+          } else {
+            document.exitFullscreen().catch(() => {});
+          }
+        });
+
+        document.addEventListener("fullscreenchange", () => {
+          this.els.btnFullscreen.innerHTML = document.fullscreenElement
+            ? "Exit Fullscreen &#x2715;"
+            : "Fullscreen &#x26F6;";
+        });
+
+        // Target Pitch Controls
+        this.els.selectTarget.addEventListener("change", (e) => {
+          AppState.targetMidi = parseInt(e.target.value, 10);
+          evaluateGateState();
+          this.updateControlLabels();
+        });
+
+        this.els.btnNoteDown.addEventListener("click", () => {
+          if (AppState.targetMidi > MIN_TARGET_MIDI) {
+            AppState.targetMidi--;
+            this.els.selectTarget.value = AppState.targetMidi;
+            evaluateGateState();
+            this.updateControlLabels();
+          }
+        });
+
+        this.els.btnNoteUp.addEventListener("click", () => {
+          if (AppState.targetMidi < MAX_TARGET_MIDI) {
+            AppState.targetMidi++;
+            this.els.selectTarget.value = AppState.targetMidi;
+            evaluateGateState();
+            this.updateControlLabels();
+          }
+        });
+
+        // Octave-Free Mode Toggle
+        this.els.toggleOctaveFree.addEventListener("change", (e) => {
+          AppState.octaveFree = e.target.checked;
+          evaluateGateState();
+          this.updateControlLabels();
+        });
+
+        // Manual Slider Adjustments
+        this.els.sliderTolerance.addEventListener("input", (e) => {
+          this.clearActivePreset();
+          AppState.pitchTolerance = parseInt(e.target.value, 10);
+          evaluateGateState();
+          this.updateControlLabels();
+        });
+
+        this.els.sliderVolFloor.addEventListener("input", (e) => {
+          this.clearActivePreset();
+          AppState.volumeFloor = parseInt(e.target.value, 10);
+          evaluateGateState();
+          this.updateControlLabels();
+        });
+
+        this.els.sliderSustain.addEventListener("input", (e) => {
+          this.clearActivePreset();
+          AppState.sustainDuration = parseFloat(e.target.value);
+          this.updateControlLabels();
+        });
+
+        this.els.sliderDecay.addEventListener("input", (e) => {
+          this.clearActivePreset();
+          AppState.decaySpeed = parseInt(e.target.value, 10);
+          this.updateControlLabels();
+        });
+      },
+
+      updateControlLabels() {
+        const targetName = midiToNoteName(AppState.targetMidi);
+        const pitchClass = midiToPitchClass(AppState.targetMidi);
+        const targetHz = midiToFreq(AppState.targetMidi).toFixed(1);
+
+        if (AppState.octaveFree) {
+          this.els.hudTarget.textContent = `${pitchClass} (Any Oct)`;
+          this.els.labelTargetReminder.textContent = `Target: ${pitchClass} (Octave-Free)`;
+        } else {
+          this.els.hudTarget.textContent = targetName;
+          this.els.labelTargetReminder.textContent = `Target: ${targetName} (${targetHz} Hz)`;
+        }
+
+        this.els.valTargetHz.textContent = `${targetHz} Hz`;
+        this.els.valTolerance.innerHTML = `&plusmn;${AppState.pitchTolerance} cents`;
+        this.els.valVolFloor.textContent = `${AppState.volumeFloor} / 100`;
+        this.els.valSustain.textContent = `${AppState.sustainDuration.toFixed(1)} s`;
+        this.els.valDecay.textContent = `${AppState.decaySpeed}% / s`;
+      },
+
+      render() {
+        // Persistent Top Bar Pills
+        this.els.hudNote.textContent = AppState.detectedFreq !== null ? AppState.detectedNoteName : "--";
+        this.els.hudNote.style.color = AppState.isNoteMatching ? "var(--pass-green)" : "var(--accent-blue)";
+        this.els.hudGateDot.classList.toggle("open", AppState.isGateOpen);
+        this.els.hudProgress.textContent = `${Math.round(AppState.progress)}%`;
+
+        if (AppState.isDrawerCollapsed) return;
+
+        if (AppState.detectedFreq !== null) {
+          this.els.readoutNote.textContent = AppState.detectedNoteName;
+          this.els.readoutNote.style.color = AppState.isNoteMatching ? "var(--pass-green)" : "var(--text-main)";
+          this.els.readoutHz.textContent = `${AppState.detectedFreq.toFixed(1)} Hz`;
+
+          const activeOffset = AppState.isNoteMatching ? AppState.targetCentsOff : AppState.detectedCents;
+          const sign = activeOffset > 0 ? "+" : "";
+          this.els.readoutCents.textContent = `${sign}${activeOffset} ¢`;
+        } else {
+          this.els.readoutNote.textContent = "--";
+          this.els.readoutNote.style.color = "var(--text-muted)";
+          this.els.readoutHz.textContent = "-- Hz";
+          this.els.readoutCents.textContent = "-- ¢";
+        }
+
+        this.els.readoutVol.textContent = `${AppState.currentVolume} / 100`;
+
+        if (AppState.isGateOpen) {
+          this.els.statusBeacon.classList.add("triggered");
+          this.els.beaconText.textContent = "TARGET LOCKED";
+          this.els.beaconSubtext.textContent = `Charging progress (${Math.round(AppState.progress)}%)`;
+        } else {
+          this.els.statusBeacon.classList.remove("triggered");
+          this.els.beaconText.textContent = "GATE LOCKED";
+
+          if (!AppState.isListening) {
+            this.els.beaconSubtext.textContent = "Click 'Start Microphone' to begin";
+          } else if (!AppState.isVolumePassing) {
+            this.els.beaconSubtext.textContent = "Sing louder to cross the volume floor";
+          } else if (AppState.detectedFreq === null) {
+            this.els.beaconSubtext.textContent = "Unpitched sound — sustain a steady vowel";
+          } else if (!AppState.isNoteMatching) {
+            if (AppState.octaveFree) {
+              const dir = AppState.targetCentsOff > 0 ? "lower" : "higher";
+              this.els.beaconSubtext.textContent = `Detected ${AppState.detectedNoteName} — adjust ${dir} to ${midiToPitchClass(AppState.targetMidi)}`;
+            } else {
+              const diff = AppState.detectedMidi - AppState.targetMidi;
+              const dir = diff > 0 ? "Sing lower" : "Sing higher";
+              this.els.beaconSubtext.textContent = `Detected ${AppState.detectedNoteName} — ${dir} to ${midiToNoteName(AppState.targetMidi)}`;
+            }
+          } else if (!AppState.isPitchWithinTolerance) {
+            const tuneDir = AppState.targetCentsOff > 0 ? "Slightly sharp" : "Slightly flat";
+            this.els.beaconSubtext.textContent = `${tuneDir} (${AppState.targetCentsOff}¢) — center needle`;
+          }
+        }
+
+        this.drawPitchCanvas();
+        this.drawVolumeCanvas();
+      },
+
+      drawPitchCanvas() {
+        const ctx = this.pitchCtx;
+        const w = this.els.canvasPitch.width;
+        const h = this.els.canvasPitch.height;
+        const centerX = w / 2;
+
+        ctx.clearRect(0, 0, w, h);
+
+        const tolWidth = (AppState.pitchTolerance / 50) * (w / 2);
+        ctx.fillStyle = AppState.isNoteMatching
+          ? "rgba(34, 197, 94, 0.22)"
+          : "rgba(56, 189, 248, 0.12)";
+        ctx.fillRect(centerX - tolWidth, 0, tolWidth * 2, h);
+
+        ctx.strokeStyle = AppState.isNoteMatching ? "#22c55e" : "#38bdf8";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(centerX - tolWidth, 0);
+        ctx.lineTo(centerX - tolWidth, h);
+        ctx.moveTo(centerX + tolWidth, 0);
+        ctx.lineTo(centerX + tolWidth, h);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.strokeStyle = "#94a3b8";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(centerX, 0);
+        ctx.lineTo(centerX, h);
+        ctx.stroke();
+
+        if (AppState.detectedFreq !== null) {
+          const clampedCents = Math.max(-50, Math.min(50, AppState.smoothedCents));
+          const needleX = centerX + (clampedCents / 50) * (w / 2);
+
+          let needleColor = "#f59e0b";
+          if (AppState.isNoteMatching) {
+            needleColor = AppState.isPitchWithinTolerance ? "#22c55e" : "#ef4444";
+          }
+
+          ctx.strokeStyle = needleColor;
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(needleX, 6);
+          ctx.lineTo(needleX, h - 6);
+          ctx.stroke();
+
+          ctx.fillStyle = needleColor;
+          ctx.beginPath();
+          ctx.arc(needleX, h / 2, 7, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      },
+
+      drawVolumeCanvas() {
+        const ctx = this.volCtx;
+        const w = this.els.canvasVolume.width;
+        const h = this.els.canvasVolume.height;
+
+        ctx.clearRect(0, 0, w, h);
+
+        const barWidth = (AppState.smoothedVolume / 100) * w;
+        ctx.fillStyle = AppState.isVolumePassing ? "#22c55e" : "#38bdf8";
+        ctx.fillRect(0, 8, barWidth, h - 16);
+
+        const floorX = (AppState.volumeFloor / 100) * w;
+        ctx.strokeStyle = "#ef4444";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(floorX, 0);
+        ctx.lineTo(floorX, h);
+        ctx.stroke();
+      }
+    };
+
+    // Boot Application Suite
+    window.addEventListener("DOMContentLoaded", () => {
+      UIController.init();
+      SkinManager.init(document.getElementById("canvas-game"));
+      GameEngine.startLoop();
+    });
+  </script>
+</body>
+</html>
