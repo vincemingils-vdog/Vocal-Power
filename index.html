@@ -2112,13 +2112,19 @@
 
       init() {
         this.stars = [];
-        for (let i = 0; i < 110; i++) {
-          this.stars.push({ x: Math.random(), y: Math.random(), size: 1 + Math.random() * 2.5, twinkle: Math.random() * Math.PI * 2 });
+        for (let i = 0; i < 120; i++) {
+          this.stars.push({
+            x: Math.random(),
+            y: Math.random(),
+            size: 1 + Math.random() * 2.5,
+            twinkle: Math.random() * Math.PI * 2
+          });
         }
         this.clouds = [
           { x: 0.18, y: 0.15, scale: 1.15, speed: 0.22 },
           { x: 0.78, y: 0.38, scale: 0.90, speed: 0.28 },
-          { x: 0.32, y: 0.65, scale: 1.30, speed: 0.19 }
+          { x: 0.32, y: 0.65, scale: 1.30, speed: 0.19 },
+          { x: 0.84, y: 0.82, scale: 1.00, speed: 0.25 }
         ];
       },
 
@@ -2126,32 +2132,58 @@
         this.exhaustParticles = [];
       },
 
-      onVictory() {},
+      onVictory() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        for (let i = 0; i < 65; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 140 + Math.random() * 380;
+          this.exhaustParticles.push({
+            x: w / 2,
+            y: h * 0.28,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            r: 4 + Math.random() * 7,
+            alpha: 1,
+            color: Math.random() > 0.4 ? "#38bdf8" : "#facc15",
+            decay: 0.85 + Math.random() * 0.5
+          });
+        }
+      },
 
       update(dt, progRatio) {
         this.time += dt;
         const elev = AppState.gamePhase === "VICTORY" ? 1.0 : progRatio;
-        const starSpeed = (AppState.gamePhase === "VICTORY" || elev >= 0.95) ? 1.65 : (elev > 0.55 ? (elev - 0.55) * 0.65 : 0.03);
+        const starSpeed = (AppState.gamePhase === "VICTORY" || elev >= 0.95)
+          ? 1.65
+          : (elev > 0.55 ? (elev - 0.55) * 0.65 : 0.03);
 
         for (const st of this.stars) st.y = (st.y + starSpeed * dt) % 1;
         for (const cl of this.clouds) cl.y = (cl.y + cl.speed * (0.2 + elev * 1.6) * dt) % 1.25;
 
         if (AppState.gamePhase === "ACTIVE" && progRatio > 0) {
-          const w = window.innerWidth, h = window.innerHeight;
-          const bottomY = h * 0.78, topY = h * 0.28;
+          const w = window.innerWidth;
+          const h = window.innerHeight;
+          const bottomY = h * 0.78;
+          const topY = h * 0.28;
           const rocketY = bottomY - elev * (bottomY - topY);
           const volScale = 0.55 + (AppState.currentVolume / 100) * 1.45;
+          const isGround = elev <= 0.25;
+          const spawnCount = isGround ? 5 : 6;
 
-          for (let i = 0; i < 5; i++) {
-            const isSmoke = Math.random() > 0.5;
+          for (let i = 0; i < spawnCount; i++) {
+            const isSmoke = Math.random() > (isGround ? 0.35 : 0.6);
+            const spreadX = isGround ? (Math.random() - 0.5) * 280 : (Math.random() - 0.5) * 95;
+            const vy = isGround ? -30 + Math.random() * 90 : 200 + Math.random() * 280 * volScale;
+
             this.exhaustParticles.push({
               x: w / 2 + (Math.random() - 0.5) * 28,
               y: rocketY + 8,
-              vx: (Math.random() - 0.5) * 120,
-              vy: 180 + Math.random() * 260 * volScale,
+              vx: spreadX,
+              vy: vy,
               r: (isSmoke ? 16 : 9) * volScale,
               alpha: 0.95,
-              color: isSmoke ? "rgba(226, 232, 240, 0.72)" : "#f97316",
+              color: isSmoke ? "rgba(226, 232, 240, 0.72)" : (Math.random() > 0.45 ? "#f97316" : "#fef08a"),
               decay: isSmoke ? 0.65 : 1.55
             });
           }
@@ -2171,29 +2203,268 @@
         const elev = AppState.gamePhase === "VICTORY" ? 1.0 : progRatio;
         const centerX = w / 2;
 
-        const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
+        const lerpColor = (hexA, hexB, t) => {
+          const clampT = Math.max(0, Math.min(1, t));
+          const a = parseInt(hexA.slice(1), 16);
+          const b = parseInt(hexB.slice(1), 16);
+          const r = Math.round(((a >> 16) & 255) + (((b >> 16) & 255) - ((a >> 16) & 255)) * clampT);
+          const g = Math.round(((a >> 8) & 255) + (((b >> 8) & 255) - ((a >> 8) & 255)) * clampT);
+          const bl = Math.round((a & 255) + ((b & 255) - (a & 255)) * clampT);
+          return `rgb(${r}, ${g}, ${bl})`;
+        };
+
+        // 1. Atmosphere Altitude Transition Gradients
+        let topCol, botCol;
         if (elev < 0.25) {
-          bgGrad.addColorStop(0, "#38bdf8"); bgGrad.addColorStop(1, "#86efac");
+          const t = elev / 0.25;
+          topCol = lerpColor("#38bdf8", "#0284c7", t);
+          botCol = lerpColor("#86efac", "#bae6fd", t);
         } else if (elev < 0.60) {
-          bgGrad.addColorStop(0, "#0284c7"); bgGrad.addColorStop(1, "#fde047");
+          const t = (elev - 0.25) / 0.35;
+          topCol = lerpColor("#0284c7", "#312e81", t);
+          botCol = lerpColor("#fde047", "#f59e0b", t);
         } else if (elev < 0.95) {
-          bgGrad.addColorStop(0, "#312e81"); bgGrad.addColorStop(1, "#7e22ce");
+          const t = (elev - 0.60) / 0.35;
+          topCol = lerpColor("#312e81", "#090d16", t);
+          botCol = lerpColor("#7e22ce", "#1e1b4b", t);
         } else {
-          bgGrad.addColorStop(0, "#02040a"); bgGrad.addColorStop(1, "#090d1f");
+          topCol = "#02040a";
+          botCol = "#090d1f";
         }
+
+        const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
+        bgGrad.addColorStop(0, topCol);
+        bgGrad.addColorStop(1, botCol);
         ctx.fillStyle = bgGrad;
         ctx.fillRect(0, 0, w, h);
 
+        // 2. Stars & Warp Trails
         if (elev >= 0.55) {
           const starAlpha = Math.min(1, (elev - 0.55) / 0.35);
+          const isWarp = elev >= 0.95 || AppState.gamePhase === "VICTORY";
           for (const st of this.stars) {
-            ctx.fillStyle = `rgba(255, 255, 255, ${starAlpha})`;
-            ctx.beginPath();
-            ctx.arc(st.x * w, st.y * h, st.size, 0, Math.PI * 2);
-            ctx.fill();
+            const sx = st.x * w;
+            const sy = st.y * h;
+            if (isWarp) {
+              ctx.strokeStyle = `rgba(186, 230, 253, ${starAlpha})`;
+              ctx.lineWidth = st.size * 1.2;
+              ctx.beginPath();
+              ctx.moveTo(sx, sy);
+              ctx.lineTo(sx, sy - 46);
+              ctx.stroke();
+            } else {
+              const tw = 0.5 + 0.5 * Math.sin(this.time * 4 + st.twinkle);
+              ctx.fillStyle = `rgba(255, 255, 255, ${starAlpha * tw})`;
+              ctx.beginPath();
+              ctx.arc(sx, sy, st.size, 0, Math.PI * 2);
+              ctx.fill();
+            }
           }
         }
 
+        // 3. Curving Planet Earth & High-Altitude Weather Balloon (60% - 95%)
+        if (elev >= 0.58 && elev < 0.98) {
+          const stratT = (elev - 0.58) / 0.40;
+          const earthY = h + w * 1.15 + stratT * 140;
+          const earthR = w * 1.3;
+
+          ctx.save();
+          ctx.strokeStyle = "rgba(56, 189, 248, 0.45)";
+          ctx.lineWidth = 26;
+          ctx.beginPath();
+          ctx.arc(centerX, earthY, earthR, Math.PI * 1.15, Math.PI * 1.85);
+          ctx.stroke();
+
+          const earthGrad = ctx.createRadialGradient(centerX, earthY - earthR, 40, centerX, earthY, earthR);
+          earthGrad.addColorStop(0, "#2563eb");
+          earthGrad.addColorStop(0.4, "#1d4ed8");
+          earthGrad.addColorStop(1, "#0f172a");
+          ctx.fillStyle = earthGrad;
+          ctx.beginPath();
+          ctx.arc(centerX, earthY, earthR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+
+          const balloonX = w * 0.76 + Math.sin(this.time * 2) * 18;
+          const balloonY = h * 0.15 + stratT * (h * 0.75);
+          ctx.save();
+          ctx.translate(balloonX, balloonY);
+          ctx.fillStyle = "rgba(248, 250, 252, 0.85)";
+          ctx.strokeStyle = "#94a3b8";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, 26, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(-10, 23);
+          ctx.lineTo(0, 44);
+          ctx.lineTo(10, 23);
+          ctx.stroke();
+          ctx.fillStyle = "#f59e0b";
+          ctx.fillRect(-7, 44, 14, 10);
+          ctx.restore();
+        }
+
+        // 4. Orbital Ringed Planet & Passing Satellite (95% - 100%)
+        if (elev >= 0.92) {
+          const spaceAlpha = Math.min(1, (elev - 0.92) / 0.08);
+          ctx.save();
+          ctx.globalAlpha = spaceAlpha;
+          const px = w * 0.80;
+          const py = h * 0.22;
+          const pGrad = ctx.createRadialGradient(px - 18, py - 18, 8, px, py, 55);
+          pGrad.addColorStop(0, "#f472b6");
+          pGrad.addColorStop(1, "#581c87");
+          ctx.fillStyle = pGrad;
+          ctx.beginPath();
+          ctx.arc(px, py, 52, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = "rgba(253, 224, 71, 0.75)";
+          ctx.lineWidth = 8;
+          ctx.beginPath();
+          ctx.ellipse(px, py, 98, 20, -0.3, 0, Math.PI * 2);
+          ctx.stroke();
+
+          const satX = ((this.time * 110) % (w + 200)) - 100;
+          const satY = h * 0.18 + Math.sin(this.time * 1.8) * 35;
+          ctx.translate(satX, satY);
+          ctx.rotate(0.25);
+          ctx.fillStyle = "#38bdf8";
+          ctx.strokeStyle = "#e2e8f0";
+          ctx.lineWidth = 2;
+          ctx.fillRect(-48, -10, 28, 20);
+          ctx.strokeRect(-48, -10, 28, 20);
+          ctx.fillRect(20, -10, 28, 20);
+          ctx.strokeRect(20, -10, 28, 20);
+          ctx.fillStyle = "#cbd5e1";
+          ctx.fillRect(-14, -14, 28, 28);
+          ctx.fillStyle = Math.sin(this.time * 10) > 0 ? "#ef4444" : "#facc15";
+          ctx.beginPath();
+          ctx.arc(0, 22, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // 5. Fluffy Clouds, Birds & Airliner (20% - 65%)
+        if (elev >= 0.18 && elev <= 0.68) {
+          const atmoAlpha = elev < 0.25 ? (elev - 0.18) / 0.07 : (elev > 0.58 ? 1 - (elev - 0.58) / 0.10 : 1);
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, Math.min(1, atmoAlpha));
+
+          for (const cl of this.clouds) {
+            const cx = cl.x * w;
+            const cy = (cl.y - 0.15) * h;
+            const sc = cl.scale;
+            ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+            ctx.beginPath();
+            ctx.arc(cx, cy, 36 * sc, 0, Math.PI * 2);
+            ctx.arc(cx + 28 * sc, cy - 10 * sc, 28 * sc, 0, Math.PI * 2);
+            ctx.arc(cx + 54 * sc, cy + 4 * sc, 24 * sc, 0, Math.PI * 2);
+            ctx.arc(cx - 28 * sc, cy + 6 * sc, 24 * sc, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          const birdProgress = (elev - 0.20) / 0.40;
+          const birdBaseY = h * 0.22 + birdProgress * (h * 0.65);
+          ctx.strokeStyle = "#1e293b";
+          ctx.lineWidth = 3;
+          for (let b = 0; b < 4; b++) {
+            const bx = centerX - 180 - b * 34 - (this.time * 18) % 60;
+            const by = birdBaseY + b * 18;
+            const flap = Math.sin(this.time * 16 + b) * 8;
+            ctx.beginPath();
+            ctx.moveTo(bx - 12, by - flap);
+            ctx.quadraticCurveTo(bx - 5, by - 6, bx, by);
+            ctx.quadraticCurveTo(bx + 5, by - 6, bx + 12, by - flap);
+            ctx.stroke();
+          }
+
+          const planeX = w * 0.82 - birdProgress * (w * 0.55);
+          const planeY = h * 0.18 + birdProgress * (h * 0.58);
+          ctx.save();
+          ctx.translate(planeX, planeY);
+          ctx.fillStyle = "#f8fafc";
+          ctx.strokeStyle = "#475569";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 44, 9, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = "#ef4444";
+          ctx.beginPath();
+          ctx.moveTo(30, -4);
+          ctx.lineTo(44, -22);
+          ctx.lineTo(42, -2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+
+          ctx.restore();
+        }
+
+        // 6. Ground Mountains, Pine Trees, Launchpad & Gantry Tower (0% - 25%)
+        if (elev <= 0.32) {
+          const groundOffset = (elev / 0.25) * (h * 0.52);
+          const groundY = h * 0.80 + groundOffset;
+
+          ctx.fillStyle = "#334155";
+          ctx.beginPath();
+          ctx.moveTo(0, groundY);
+          ctx.lineTo(w * 0.18, groundY - 150);
+          ctx.lineTo(w * 0.35, groundY - 65);
+          ctx.lineTo(w * 0.58, groundY - 195);
+          ctx.lineTo(w * 0.78, groundY - 80);
+          ctx.lineTo(w * 0.92, groundY - 140);
+          ctx.lineTo(w, groundY - 50);
+          ctx.lineTo(w, groundY);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.fillStyle = "#15803d";
+          ctx.fillRect(0, groundY, w, h - groundY + 300);
+
+          [0.08, 0.14, 0.22, 0.76, 0.83, 0.90].forEach((txRatio, idx) => {
+            const tx = w * txRatio;
+            const th = 48 + (idx % 2) * 16;
+            ctx.fillStyle = "#78350f";
+            ctx.fillRect(tx - 4, groundY - 12, 8, 12);
+            ctx.fillStyle = "#166534";
+            ctx.beginPath();
+            ctx.moveTo(tx, groundY - th);
+            ctx.lineTo(tx - 20, groundY - 10);
+            ctx.lineTo(tx + 20, groundY - 10);
+            ctx.closePath();
+            ctx.fill();
+          });
+
+          ctx.fillStyle = "#475569";
+          ctx.strokeStyle = "#94a3b8";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.roundRect(centerX - 160, groundY - 20, 320, 26, 6);
+          ctx.fill();
+          ctx.stroke();
+
+          const gantryX = centerX - 128;
+          ctx.strokeStyle = "#dc2626";
+          ctx.lineWidth = 4;
+          ctx.strokeRect(gantryX, groundY - 240, 42, 220);
+          ctx.beginPath();
+          for (let gy = groundY - 240; gy < groundY - 25; gy += 36) {
+            ctx.moveTo(gantryX, gy);
+            ctx.lineTo(gantryX + 42, gy + 36);
+            ctx.moveTo(gantryX + 42, gy);
+            ctx.lineTo(gantryX, gy + 36);
+          }
+          const armSwing = Math.min(1, elev / 0.12) * 38;
+          ctx.moveTo(gantryX + 42, groundY - 155);
+          ctx.lineTo(centerX - 36 - armSwing, groundY - 155 - armSwing * 0.4);
+          ctx.stroke();
+        }
+
+        // 7. Exhaust Particles
         for (const p of this.exhaustParticles) {
           ctx.save();
           ctx.globalAlpha = Math.max(0, p.alpha);
@@ -2204,36 +2475,90 @@
           ctx.restore();
         }
 
-        const bottomY = h * 0.78, topY = h * 0.28;
-        const rocketY = bottomY - elev * (bottomY - topY);
+        // 8. Rocket Climb & Engine Cone
+        const bottomY = h * 0.78;
+        const topY = h * 0.28;
+        const rocketY = AppState.gamePhase === "VICTORY"
+          ? topY + Math.sin(this.time * 4.5) * 10
+          : bottomY - elev * (bottomY - topY);
+
+        let jitterX = 0, jitterY = 0;
+        if (AppState.gamePhase === "ACTIVE" && elev > 0) {
+          const shakeAmp = elev <= 0.25 ? 4.5 : 2.2;
+          jitterX = (Math.random() - 0.5) * shakeAmp * 2;
+          jitterY = (Math.random() - 0.5) * shakeAmp;
+        }
 
         ctx.save();
-        ctx.translate(centerX, rocketY);
+        ctx.translate(centerX + jitterX, rocketY + jitterY);
 
         if (elev > 0 || AppState.gamePhase === "VICTORY") {
-          const flameLen = 65 + (AppState.currentVolume / 100) * 60;
-          ctx.fillStyle = "#f97316";
+          const volScale = 0.6 + (AppState.currentVolume / 100) * 1.25;
+          const flameLen = (62 + Math.random() * 40) * volScale;
+          const flameGrad = ctx.createLinearGradient(0, 0, 0, flameLen);
+          flameGrad.addColorStop(0, "#ffffff");
+          flameGrad.addColorStop(0.28, "#fef08a");
+          flameGrad.addColorStop(0.68, "#f97316");
+          flameGrad.addColorStop(1, "rgba(239, 68, 68, 0)");
+          ctx.fillStyle = flameGrad;
           ctx.beginPath();
-          ctx.moveTo(-20, 0);
-          ctx.lineTo(0, flameLen);
-          ctx.lineTo(20, 0);
+          ctx.moveTo(-24, 0);
+          ctx.quadraticCurveTo(0, flameLen * 1.25, 0, flameLen);
+          ctx.quadraticCurveTo(0, flameLen * 1.25, 24, 0);
           ctx.closePath();
           ctx.fill();
         }
 
-        ctx.fillStyle = "#ef4444";
+        // Rocket Wings, Body, Nose Cone & Window
+        ctx.fillStyle = "#dc2626";
+        ctx.strokeStyle = "#f8fafc";
+        ctx.lineWidth = 2.5;
         ctx.beginPath();
-        ctx.moveTo(-24, -45); ctx.lineTo(-58, 12); ctx.lineTo(-20, -8); ctx.closePath(); ctx.fill();
+        ctx.moveTo(-26, -48); ctx.lineTo(-64, 14); ctx.lineTo(-22, -8); ctx.closePath(); ctx.fill(); ctx.stroke();
         ctx.beginPath();
-        ctx.moveTo(24, -45); ctx.lineTo(58, 12); ctx.lineTo(20, -8); ctx.closePath(); ctx.fill();
+        ctx.moveTo(26, -48); ctx.lineTo(64, 14); ctx.lineTo(22, -8); ctx.closePath(); ctx.fill(); ctx.stroke();
 
-        ctx.fillStyle = "#f8fafc";
+        ctx.fillStyle = "#334155";
         ctx.beginPath();
-        ctx.moveTo(-24, -10); ctx.bezierCurveTo(-40, -90, -35, -160, 0, -205);
-        ctx.bezierCurveTo(35, -160, 40, -90, 24, -10); ctx.closePath(); ctx.fill();
+        ctx.moveTo(-18, -10); ctx.lineTo(-25, 7); ctx.lineTo(25, 7); ctx.lineTo(18, -10); ctx.closePath(); ctx.fill(); ctx.stroke();
+
+        const hullGrad = ctx.createLinearGradient(-38, 0, 38, 0);
+        hullGrad.addColorStop(0, "#cbd5e1");
+        hullGrad.addColorStop(0.45, "#ffffff");
+        hullGrad.addColorStop(1, "#94a3b8");
+        ctx.fillStyle = hullGrad;
+        ctx.beginPath();
+        ctx.moveTo(-26, -10);
+        ctx.bezierCurveTo(-44, -90, -38, -165, 0, -215);
+        ctx.bezierCurveTo(38, -165, 44, -90, 26, -10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(-50, -220, 100, 64);
+        ctx.clip();
+        ctx.fillStyle = "#dc2626";
+        ctx.beginPath();
+        ctx.moveTo(-26, -10);
+        ctx.bezierCurveTo(-44, -90, -38, -165, 0, -215);
+        ctx.bezierCurveTo(38, -165, 44, -90, 26, -10);
+        ctx.fill();
+        ctx.restore();
 
         ctx.fillStyle = "#0284c7";
-        ctx.beginPath(); ctx.arc(0, -110, 16, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = "#e2e8f0";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(0, -115, 18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+        ctx.beginPath();
+        ctx.arc(-6, -121, 6, 0, Math.PI * 2);
+        ctx.fill();
+
         ctx.restore();
 
         StageHUD.drawMeter(ctx, w, h, elev, "ALTITUDE & THRUST");
@@ -2246,96 +2571,456 @@
      * 7. SKIN 3: MONSTER LASER
      * ============================================================================
      */
-    const MonsterLaserSkin = {
+   const MonsterLaserSkin = {
       sparks: [],
       time: 0,
       creepOffset: 0,
 
-      init() {},
-      onReset() { this.sparks = []; this.creepOffset = 0; },
-      onVictory() {},
+      init() {
+        this.sparks = [];
+      },
+
+      onReset() {
+        this.sparks = [];
+        this.creepOffset = 0;
+      },
+
+      onVictory() {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const portalX = w * 0.83;
+        const portalY = h * 0.78 - 135;
+
+        for (let i = 0; i < 85; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 100 + Math.random() * 360;
+          this.sparks.push({
+            x: portalX,
+            y: portalY,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            r: 4 + Math.random() * 7,
+            alpha: 1,
+            color: ["#a855f7", "#38bdf8", "#22c55e", "#facc15"][i % 4]
+          });
+        }
+      },
 
       update(dt, progRatio) {
         this.time += dt;
+
         if (AppState.gamePhase === "ACTIVE") {
-          if (progRatio <= 0.005) this.creepOffset = Math.min(220, this.creepOffset + 24 * dt);
-          else if (AppState.isGateOpen) this.creepOffset = Math.max(0, this.creepOffset - 110 * dt);
+          if (progRatio <= 0.005) {
+            this.creepOffset = Math.min(240, this.creepOffset + 26 * dt);
+          } else if (AppState.isGateOpen) {
+            this.creepOffset = Math.max(0, this.creepOffset - 120 * dt);
+          }
         }
 
         if (AppState.gamePhase === "ACTIVE" && progRatio > 0) {
-          const w = window.innerWidth, h = window.innerHeight;
-          const monsterX = w * 0.58 - this.creepOffset + progRatio * (w * 0.25);
-          for (let i = 0; i < 3; i++) {
+          const w = window.innerWidth;
+          const h = window.innerHeight;
+          const monsterX = this.getMonsterX(w, progRatio);
+          const impactX = monsterX - 88;
+          const impactY = h * 0.78 - 125;
+
+          const volNorm = AppState.currentVolume / 100;
+          const sparkCount = 3 + Math.floor(volNorm * 8);
+          for (let i = 0; i < sparkCount; i++) {
+            const angle = Math.PI + (Math.random() - 0.5) * 2.5;
+            const speed = 180 + Math.random() * 340 * (0.6 + volNorm);
             this.sparks.push({
-              x: monsterX - 70, y: h * 0.78 - 110 + (Math.random() - 0.5) * 30,
-              vx: -150 - Math.random() * 200, vy: (Math.random() - 0.5) * 200,
-              r: 3 + Math.random() * 4, alpha: 1
+              x: impactX,
+              y: impactY + (Math.random() - 0.5) * 36,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed - 70,
+              r: 3 + Math.random() * 5.5,
+              alpha: 1,
+              color: ["#22d3ee", "#f472b6", "#facc15", "#a855f7"][Math.floor(Math.random() * 4)]
             });
           }
         }
 
         for (let i = this.sparks.length - 1; i >= 0; i--) {
           const sp = this.sparks[i];
-          sp.x += sp.vx * dt; sp.y += sp.vy * dt; sp.alpha -= 1.8 * dt;
+          sp.x += sp.vx * dt;
+          sp.y += sp.vy * dt;
+          sp.alpha -= 1.85 * dt;
           if (sp.alpha <= 0) this.sparks.splice(i, 1);
         }
+      },
+
+      getMonsterX(w, progRatio) {
+        const stompLurch = progRatio <= 0.005 ? Math.sin(this.time * 4.5) * 8 : 0;
+        const baseStart = w * 0.58 - this.creepOffset + stompLurch;
+        const rightEdge = w * 0.83;
+        return baseStart + progRatio * (rightEdge - baseStart);
       },
 
       render(ctx, w, h, progRatio) {
         const floorY = h * 0.78;
         const emitterX = w * 0.11;
-        const emitterY = floorY - 115;
-        const monsterX = w * 0.58 - this.creepOffset + progRatio * (w * 0.25);
+        const emitterY = floorY - 120;
+        const monsterX = this.getMonsterX(w, progRatio);
+        const portalX = w * 0.83;
+        const portalY = floorY - 135;
 
-        ctx.fillStyle = "#090d16";
+        // 1. Underground Ruined Cavern Backdrop
+        const caveGrad = ctx.createLinearGradient(0, 0, 0, h);
+        caveGrad.addColorStop(0, "#060811");
+        caveGrad.addColorStop(0.55, "#151126");
+        caveGrad.addColorStop(1, "#271430");
+        ctx.fillStyle = caveGrad;
         ctx.fillRect(0, 0, w, h);
-        ctx.fillStyle = "#1e1b2e";
-        ctx.fillRect(0, floorY, w, h - floorY);
 
-        ctx.fillStyle = "#334155";
-        ctx.fillRect(emitterX - 30, emitterY - 25, 60, 50);
+        // Ceiling Stalactites
+        ctx.fillStyle = "#0c0a18";
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        for (let i = 0; i <= 14; i++) {
+          const sx = (i / 14) * w;
+          const sy = (i % 2 === 0) ? 45 + (i % 3) * 28 : 115 + ((i * 17) % 55);
+          ctx.lineTo(sx, sy);
+        }
+        ctx.lineTo(w, 0);
+        ctx.closePath();
+        ctx.fill();
 
-        if (AppState.gamePhase === "ACTIVE" && progRatio > 0) {
-          ctx.strokeStyle = "#38bdf8";
-          ctx.lineWidth = 14 + (AppState.currentVolume / 100) * 20;
+        // Ruined Stone Pillars & Glowing Crystals
+        [0.24, 0.48, 0.70].forEach((pxRatio, idx) => {
+          const px = w * pxRatio;
+          const ph = 180 + (idx % 2) * 75;
+          ctx.fillStyle = "#1e1b2e";
+          ctx.strokeStyle = "#332d4b";
+          ctx.lineWidth = 2;
+          ctx.fillRect(px - 26, floorY - ph, 52, ph);
+          ctx.strokeRect(px - 26, floorY - ph, 52, ph);
+
+          ctx.fillStyle = idx % 2 === 0 ? "rgba(56, 189, 248, 0.35)" : "rgba(168, 85, 247, 0.35)";
           ctx.beginPath();
-          ctx.moveTo(emitterX + 30, emitterY);
-          ctx.lineTo(monsterX - 70, emitterY);
+          ctx.moveTo(px + 28, floorY);
+          ctx.lineTo(px + 42, floorY - 48);
+          ctx.lineTo(px + 54, floorY);
+          ctx.closePath();
+          ctx.fill();
+        });
+
+        // Floor
+        ctx.fillStyle = "#0a0812";
+        ctx.fillRect(0, floorY, w, h - floorY);
+        ctx.strokeStyle = "#a855f7";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(0, floorY);
+        ctx.lineTo(w, floorY);
+        ctx.stroke();
+
+        // 2. Swirling Cosmic Portal
+        if (progRatio >= 0.65 || AppState.gamePhase === "VICTORY") {
+          const vortexFactor = AppState.gamePhase === "VICTORY" ? 1.35 : (progRatio - 0.65) / 0.35;
+          ctx.save();
+          ctx.translate(portalX, portalY);
+          ctx.rotate(this.time * 4.2);
+
+          const vGrad = ctx.createRadialGradient(0, 0, 5, 0, 0, 145 * vortexFactor);
+          vGrad.addColorStop(0, "#ffffff");
+          vGrad.addColorStop(0.35, "#38bdf8");
+          vGrad.addColorStop(0.7, "#a855f7");
+          vGrad.addColorStop(1, "rgba(88, 28, 135, 0)");
+          ctx.fillStyle = vGrad;
+          ctx.beginPath();
+          ctx.arc(0, 0, 145 * vortexFactor, 0, Math.PI * 2);
+          ctx.fill();
+
+          for (let arm = 0; arm < 4; arm++) {
+            ctx.strokeStyle = arm % 2 === 0 ? "#22d3ee" : "#f472b6";
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            for (let t = 0; t < 28; t++) {
+              const r = (t / 28) * 130 * vortexFactor;
+              const a = arm * (Math.PI / 2) + t * 0.22;
+              const vx = Math.cos(a) * r;
+              const vy = Math.sin(a) * r;
+              if (t === 0) ctx.moveTo(vx, vy);
+              else ctx.lineTo(vx, vy);
+            }
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        // 3. Cannon Emitter
+        ctx.save();
+        ctx.fillStyle = "#1e293b";
+        ctx.strokeStyle = "#475569";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(emitterX - 46, floorY - 82, 92, 82, 10);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#0f172a";
+        ctx.strokeStyle = progRatio > 0 ? "#22d3ee" : "#64748b";
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.roundRect(emitterX - 32, emitterY - 28, 78, 56, 12);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = progRatio > 0 ? "#ec4899" : "#475569";
+        ctx.beginPath();
+        ctx.ellipse(emitterX + 48, emitterY, 11, 32, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // 4. Monster Character
+        ctx.save();
+        if (AppState.gamePhase === "VICTORY") {
+          const suckProgress = Math.max(0, (AppState.victoryTimer - 1.2) / 1.8);
+          ctx.translate(portalX, portalY);
+          ctx.rotate((1 - suckProgress) * 14);
+          ctx.scale(suckProgress, suckProgress);
+          ctx.globalAlpha = suckProgress;
+          this.drawMonsterCharacter(ctx, 0, 135, true, true);
+        } else {
+          const isBlasted = progRatio > 0;
+          const pushJitter = (isBlasted && AppState.isGateOpen) ? (Math.random() - 0.5) * 12 : 0;
+          const stompBob = !isBlasted ? Math.abs(Math.sin(this.time * 4.5)) * 14 : 0;
+          ctx.translate(monsterX + pushJitter, floorY - stompBob);
+          this.drawMonsterCharacter(ctx, 0, 0, isBlasted, false);
+        }
+        ctx.restore();
+
+        // 5. Multi-Color Neon Harmonic Laser Beam
+        if (AppState.gamePhase === "ACTIVE" && progRatio > 0) {
+          const startX = emitterX + 48;
+          const impactX = monsterX - 88;
+          const volScale = 0.55 + (AppState.currentVolume / 100) * 1.35;
+          const beamThickness = (14 + progRatio * 26) * volScale;
+
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          ctx.lineCap = "round";
+
+          ctx.strokeStyle = "rgba(236, 72, 153, 0.45)";
+          ctx.lineWidth = beamThickness * 2.1;
+          ctx.beginPath();
+          ctx.moveTo(startX, emitterY);
+          ctx.lineTo(impactX, emitterY);
           ctx.stroke();
+
+          ["#22d3ee", "#facc15", "#a855f7"].forEach((col, idx) => {
+            ctx.strokeStyle = col;
+            ctx.lineWidth = 4 + volScale * 2;
+            ctx.beginPath();
+            const freq = 0.045 + idx * 0.015;
+            const phase = this.time * (26 + idx * 7) + idx * 2;
+            const amp = beamThickness * (0.55 + idx * 0.2);
+
+            for (let x = startX; x <= impactX; x += 10) {
+              const wy = emitterY + Math.sin(x * freq - phase) * amp;
+              if (x === startX) ctx.moveTo(x, wy);
+              else ctx.lineTo(x, wy);
+            }
+            ctx.stroke();
+          });
 
           ctx.strokeStyle = "#ffffff";
-          ctx.lineWidth = 4;
+          ctx.lineWidth = beamThickness * 0.45;
           ctx.beginPath();
-          ctx.moveTo(emitterX + 30, emitterY);
-          ctx.lineTo(monsterX - 70, emitterY);
+          ctx.moveTo(startX, emitterY);
+          ctx.lineTo(impactX, emitterY);
           ctx.stroke();
+
+          const shockR = beamThickness * 0.85 + Math.random() * 12;
+          const shockGrad = ctx.createRadialGradient(impactX, emitterY, 2, impactX, emitterY, shockR);
+          shockGrad.addColorStop(0, "#ffffff");
+          shockGrad.addColorStop(0.5, "#22d3ee");
+          shockGrad.addColorStop(1, "rgba(236, 72, 153, 0)");
+          ctx.fillStyle = shockGrad;
+          ctx.beginPath();
+          ctx.arc(impactX, emitterY, shockR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
         }
 
+        // 6. Impact Sparks
         for (const sp of this.sparks) {
-          ctx.fillStyle = `rgba(250, 204, 21, ${sp.alpha})`;
-          ctx.beginPath(); ctx.arc(sp.x, sp.y, sp.r, 0, Math.PI * 2); ctx.fill();
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, sp.alpha);
+          ctx.fillStyle = sp.color;
+          ctx.beginPath();
+          ctx.arc(sp.x, sp.y, sp.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
         }
-
-        ctx.save();
-        ctx.translate(monsterX, floorY);
-        ctx.fillStyle = "#7c3aed";
-        ctx.beginPath();
-        ctx.moveTo(-60, 0); ctx.bezierCurveTo(-80, -140, -60, -200, 0, -200);
-        ctx.bezierCurveTo(60, -200, 80, -140, 60, 0); ctx.closePath(); ctx.fill();
-
-        ctx.fillStyle = "#ffffff";
-        ctx.beginPath(); ctx.arc(-20, -140, 16, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(20, -140, 16, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = "#090d16";
-        ctx.beginPath(); ctx.arc(-22, -140, 6, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(18, -140, 6, 0, Math.PI * 2); ctx.fill();
-
-        ctx.fillStyle = "#f43f5e";
-        ctx.beginPath(); ctx.arc(0, -110, 24, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
 
         StageHUD.drawMeter(ctx, w, h, progRatio, "SONIC LASER POWER");
         StageHUD.drawVictoryBanner(ctx, w, h, "MONSTER BANISHED!", "#a855f7");
+      },
+
+      drawMonsterCharacter(ctx, ox, oy, isBlasted, isDizzy) {
+        ctx.save();
+        ctx.translate(ox, oy);
+
+        // Stomping Feet
+        const step = Math.sin(this.time * 4.5) * 16;
+        ctx.fillStyle = "#3b0764";
+        ctx.strokeStyle = "#c084fc";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(-44 + (isBlasted ? 14 : step), -14, 30, 15, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.ellipse(44 - (isBlasted ? 14 : step), -14, 30, 15, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Flailing Arms
+        ctx.strokeStyle = "#581c87";
+        ctx.lineWidth = 22;
+        ctx.lineCap = "round";
+        const flailA = isBlasted ? Math.sin(this.time * 28) * 38 : Math.sin(this.time * 4.5) * 10;
+        const flailB = isBlasted ? Math.cos(this.time * 32) * 38 : -Math.sin(this.time * 4.5) * 10;
+
+        ctx.beginPath();
+        if (isBlasted) {
+          ctx.moveTo(-58, -135);
+          ctx.quadraticCurveTo(-115, -185 + flailA, -95, -230 + flailB);
+          ctx.moveTo(58, -135);
+          ctx.quadraticCurveTo(118, -185 + flailB, 102, -230 + flailA);
+        } else {
+          ctx.moveTo(-62, -130);
+          ctx.quadraticCurveTo(-105, -110 + flailA, -88, -75);
+          ctx.moveTo(62, -130);
+          ctx.quadraticCurveTo(95, -110 + flailB, 78, -75);
+        }
+        ctx.stroke();
+
+        // Horns
+        ctx.fillStyle = "#facc15";
+        ctx.strokeStyle = "#ca8a04";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-52, -195);
+        ctx.quadraticCurveTo(-102, -242, -48, -256);
+        ctx.quadraticCurveTo(-40, -218, -24, -205);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(52, -195);
+        ctx.quadraticCurveTo(102, -242, 48, -256);
+        ctx.quadraticCurveTo(40, -218, 24, -205);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Hulking Body
+        const bodyGrad = ctx.createRadialGradient(-20, -135, 18, 0, -115, 130);
+        if (isBlasted) {
+          bodyGrad.addColorStop(0, "#f43f5e");
+          bodyGrad.addColorStop(1, "#581c87");
+        } else {
+          bodyGrad.addColorStop(0, "#7c3aed");
+          bodyGrad.addColorStop(1, "#2e1065");
+        }
+        ctx.fillStyle = bodyGrad;
+        ctx.strokeStyle = "#d8b4fe";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-86, -24);
+        ctx.bezierCurveTo(-110, -145, -78, -225, 0, -225);
+        ctx.bezierCurveTo(78, -225, 110, -145, 86, -24);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Eyes (Spiral eyes when dizzy)
+        [-34, 14].forEach(ex => {
+          ctx.fillStyle = "#ffffff";
+          ctx.strokeStyle = "#0f172a";
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(ex, -162, 20, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          if (isDizzy) {
+            ctx.save();
+            ctx.translate(ex, -162);
+            ctx.rotate(this.time * 12);
+            ctx.strokeStyle = "#ef4444";
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            for (let a = 0; a < Math.PI * 4; a += 0.3) {
+              const r = (a / (Math.PI * 4)) * 16;
+              const sx = Math.cos(a) * r;
+              const sy = Math.sin(a) * r;
+              if (a === 0) ctx.moveTo(sx, sy);
+              else ctx.lineTo(sx, sy);
+            }
+            ctx.stroke();
+            ctx.restore();
+          } else {
+            ctx.fillStyle = isBlasted ? "#ef4444" : "#090d16";
+            ctx.beginPath();
+            ctx.arc(ex - 5, -162, isBlasted ? 6 : 9, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+
+        // Unibrow
+        ctx.strokeStyle = "#1e1b4b";
+        ctx.lineWidth = 9;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        if (isBlasted) {
+          ctx.moveTo(-58, -188); ctx.lineTo(-10, -176); ctx.lineTo(38, -188);
+        } else {
+          ctx.moveTo(-56, -184); ctx.lineTo(-10, -168); ctx.lineTo(36, -184);
+        }
+        ctx.stroke();
+
+        // Bulbous Nose
+        const noseGrad = ctx.createRadialGradient(-34, -132, 4, -26, -126, 36);
+        noseGrad.addColorStop(0, "#fb7185");
+        noseGrad.addColorStop(1, "#be123c");
+        ctx.fillStyle = noseGrad;
+        ctx.strokeStyle = "#4c0519";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(-28, -126, 32, 22, -0.15, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#4c0519";
+        ctx.beginPath();
+        ctx.ellipse(-42, -118, 5, 3, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Mouth & Fangs
+        ctx.fillStyle = "#090d16";
+        ctx.strokeStyle = "#c4b5fd";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        if (isBlasted) {
+          ctx.ellipse(-12, -68, 36, 24, 0, 0, Math.PI * 2);
+        } else {
+          ctx.roundRect(-52, -78, 80, 24, 8);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#f8fafc";
+        ctx.beginPath();
+        ctx.moveTo(-36, -78); ctx.lineTo(-28, -62); ctx.lineTo(-20, -78);
+        ctx.moveTo(4, -78); ctx.lineTo(12, -62); ctx.lineTo(20, -78);
+        ctx.fill();
+
+        ctx.restore();
       }
     };
 
