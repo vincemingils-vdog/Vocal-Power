@@ -549,6 +549,110 @@
         display: none;
       }
     }
+    /* Reference Pitch Button */
+    #btn-play-tone {
+      background: #0284c7;
+      color: var(--text-main);
+      border: 1px solid var(--accent-blue);
+      padding: 0.38rem 0.75rem;
+      font-size: 0.85rem;
+      font-weight: 800;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    #btn-play-tone:hover {
+      background: var(--accent-blue);
+      color: #020617;
+    }
+
+    #btn-play-tone.playing {
+      background: var(--warn-amber);
+      border-color: #fde047;
+      color: #020617;
+      box-shadow: 0 0 12px rgba(245, 158, 11, 0.5);
+    }
+
+    /* Welcome / Instructions Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 7, 15, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      opacity: 1;
+      transition: opacity 0.25s ease;
+    }
+
+    .modal-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .modal-card {
+      background: var(--card-bg);
+      border: 2px solid var(--accent-blue);
+      border-radius: 16px;
+      max-width: 580px;
+      width: 100%;
+      padding: 1.75rem;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75), 0 0 30px rgba(56, 189, 248, 0.2);
+      display: flex;
+      flex-direction: column;
+      gap: 1.15rem;
+    }
+
+    .modal-card h2 {
+      font-size: 1.45rem;
+      font-weight: 900;
+      color: var(--accent-blue);
+    }
+
+    .modal-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 0.8rem;
+      list-style: none;
+    }
+
+    .modal-steps li {
+      background: #070b14;
+      border: 1px solid var(--border-color);
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      line-height: 1.45;
+      color: var(--text-main);
+    }
+
+    .modal-steps li strong {
+      color: var(--pass-green);
+      display: block;
+      margin-bottom: 0.15rem;
+      font-size: 0.95rem;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    #btn-close-modal {
+      background: var(--pass-green);
+      color: #020617;
+      font-size: 1rem;
+      font-weight: 900;
+      padding: 0.7rem 1.75rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -586,6 +690,7 @@
       </div>
 
       <div class="top-actions">
+        <button id="btn-help" class="btn btn-secondary">? Help</button>
         <button id="btn-fullscreen" class="btn btn-secondary" title="Toggle Projector Fullscreen">Fullscreen &#x26F6;</button>
         <button id="btn-drawer-toggle" class="btn btn-secondary">Hide Controls &blacktriangle;</button>
         <button id="btn-mic" class="btn">Start Microphone</button>
@@ -624,6 +729,7 @@
             <button id="btn-note-down" class="step-btn" title="Half-step down">&minus;</button>
             <select id="select-target"></select>
             <button id="btn-note-up" class="step-btn" title="Half-step up">&plus;</button>
+            <button id="btn-play-tone" title="Play reference pitch">&#9835; Hear Pitch</button>
           </div>
         </div>
 
@@ -721,6 +827,34 @@
     </section>
   </div>
 
+  <!-- WELCOME INSTRUCTIONS POP-UP -->
+  <div id="welcome-modal" class="modal-overlay">
+    <div class="modal-card">
+      <h2>Vocal Pitch &amp; Projection Arcade</h2>
+      <p style="color: var(--text-muted); font-size: 0.92rem;">Quick start guide for rehearsal:</p>
+      <ul class="modal-steps">
+        <li>
+          <strong>1. Microphone Access</strong>
+          Click <b>Start Microphone</b> in the top right and allow browser access.
+        </li>
+        <li>
+          <strong>2. Set &amp; Hear Your Note</strong>
+          Select your <b>Target Pitch</b> and click <b>&#9835; Hear Pitch</b> to give the choir a reference tone. Keep <i>Octave-Free</i> ON so all vocal ranges match.
+        </li>
+        <li>
+          <strong>3. Rehearsal Presets</strong>
+          Tap <b>Warm-Up</b>, <b>Section Battle</b>, or <b>Boss Mode</b> to instantly calibrate volume and pitch tolerance.
+        </li>
+        <li>
+          <strong>4. Sing &amp; Sustain</strong>
+          Choose a game mode, click <b>Hide Controls</b>, and have students sustain the target note above the volume floor to win!
+        </li>
+      </ul>
+      <div class="modal-footer">
+        <button id="btn-close-modal">Got It — Let's Sing!</button>
+      </div>
+    </div>
+  </div>
   <script>
     /**
      * ============================================================================
@@ -773,6 +907,7 @@
      */
     const AppState = {
       isListening: false,
+      isPlayingRefTone: false,
       isDrawerCollapsed: false,
       gameMode: "GLASS",     // "GLASS" | "ROCKET" | "MONSTER"
       activePreset: null,    // "WARMUP" | "BATTLE" | "BOSS" | null
@@ -846,6 +981,7 @@
       }
 
       AppState.isGateOpen = (
+        !AppState.isPlayingRefTone &&
         AppState.isVolumePassing &&
         AppState.isPitchWithinTolerance
       );
@@ -1026,6 +1162,62 @@
         return sampleRate / T0;
       },
 
+      refToneTimer: null,
+
+      async playReferenceTone(freq, duration = 2.0, onEndCallback = null) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!this.audioCtx) {
+          this.audioCtx = new AudioContextClass();
+        }
+        if (this.audioCtx.state === "suspended") {
+          await this.audioCtx.resume();
+        }
+
+        if (this.refToneTimer) clearTimeout(this.refToneTimer);
+
+        AppState.isPlayingRefTone = true;
+        evaluateGateState();
+
+        const now = this.audioCtx.currentTime;
+        const osc1 = this.audioCtx.createOscillator();
+        const osc2 = this.audioCtx.createOscillator();
+        const filter = this.audioCtx.createBiquadFilter();
+        const masterGain = this.audioCtx.createGain();
+
+        osc1.type = "triangle";
+        osc1.frequency.setValueAtTime(freq, now);
+
+        osc2.type = "sine";
+        osc2.frequency.setValueAtTime(freq * 2, now);
+
+        const harmGain = this.audioCtx.createGain();
+        harmGain.gain.setValueAtTime(0.18, now);
+
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(freq * 4, now);
+
+        masterGain.gain.setValueAtTime(0.001, now);
+        masterGain.gain.linearRampToValueAtTime(0.35, now + 0.06);
+        masterGain.gain.setValueAtTime(0.35, now + duration - 0.25);
+        masterGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+        osc1.connect(filter);
+        osc2.connect(harmGain);
+        harmGain.connect(filter);
+        filter.connect(masterGain);
+        masterGain.connect(this.audioCtx.destination);
+
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + duration);
+        osc2.stop(now + duration);
+
+        this.refToneTimer = setTimeout(() => {
+          AppState.isPlayingRefTone = false;
+          evaluateGateState();
+          if (onEndCallback) onEndCallback();
+        }, duration * 1000);
+      },
       playVictorySound(mode) {
         if (!this.audioCtx) return;
         const now = this.audioCtx.currentTime;
@@ -3169,6 +3361,10 @@
         this.els = {
           errorToast: document.getElementById("error-toast"),
           btnMic: document.getElementById("btn-mic"),
+          btnPlayTone: document.getElementById("btn-play-tone"),
+          btnHelp: document.getElementById("btn-help"),
+          welcomeModal: document.getElementById("welcome-modal"),
+          btnCloseModal: document.getElementById("btn-close-modal"),
           btnDrawerToggle: document.getElementById("btn-drawer-toggle"),
           btnFullscreen: document.getElementById("btn-fullscreen"),
           controlDrawer: document.getElementById("control-drawer"),
@@ -3381,6 +3577,32 @@
           this.clearActivePreset();
           AppState.decaySpeed = parseInt(e.target.value, 10);
           this.updateControlLabels();
+        });
+        // Reference Pitch Button
+        this.els.btnPlayTone.addEventListener("click", () => {
+          const targetFreq = midiToFreq(AppState.targetMidi);
+          this.els.btnPlayTone.classList.add("playing");
+          this.els.btnPlayTone.innerHTML = "&#9835; Playing...";
+
+          AudioEngine.playReferenceTone(targetFreq, 2.0, () => {
+            this.els.btnPlayTone.classList.remove("playing");
+            this.els.btnPlayTone.innerHTML = "&#9835; Hear Pitch";
+          });
+        });
+
+        // Modal Controls
+        this.els.btnCloseModal.addEventListener("click", () => {
+          this.els.welcomeModal.classList.add("hidden");
+        });
+
+        this.els.btnHelp.addEventListener("click", () => {
+          this.els.welcomeModal.classList.remove("hidden");
+        });
+
+        this.els.welcomeModal.addEventListener("click", (e) => {
+          if (e.target === this.els.welcomeModal) {
+            this.els.welcomeModal.classList.add("hidden");
+          }
         });
       },
 
