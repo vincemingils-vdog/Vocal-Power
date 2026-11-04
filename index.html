@@ -3672,7 +3672,19 @@
           this.els.hudProgress.textContent = progStr;
         }
 
-        if (AppState.isDrawerCollapsed) return;
+        if (AppState.isDrawerCollapsed) {
+      const activeOffset = AppState.isNoteMatching ? AppState.targetCentsOff : AppState.detectedCents;
+      const sign = activeOffset > 0 ? "+" : "";
+      const offsetStr = AppState.detectedFreq !== null ? `${sign}${activeOffset} ¢` : "-- ¢";
+      if (this.els.hudRibbonOffset.textContent !== offsetStr) {
+        this.els.hudRibbonOffset.textContent = offsetStr;
+        this.els.hudRibbonOffset.style.color = AppState.isPitchWithinTolerance && AppState.isVolumePassing ? "var(--pass-green)" : (AppState.isNoteMatching ? "var(--warn-amber)" : "var(--fail-red)");
+      }
+      if (this.hudPitchCtx && this.els.canvasHudPitch) {
+        this.drawPitchRibbonCanvas(this.hudPitchCtx, this.els.canvasHudPitch.width, this.els.canvasHudPitch.height);
+      }
+      return;
+    }
 
         // Drawer Telemetry (Cached to eliminate DOM layout thrashing)
         const noteStr = AppState.detectedFreq !== null ? AppState.detectedNoteName : "--";
