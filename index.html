@@ -552,6 +552,58 @@
       font-weight: 500;
     }
 
+    /* Bottom HUD Pitch Ribbon (Visible ONLY when controls are hidden) */
+    #hud-ribbon-container {
+      position: absolute;
+      bottom: 84px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(680px, 82vw);
+      height: 64px;
+      background: rgba(9, 13, 22, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 0.35rem 0.65rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      z-index: 15;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    }
+
+    #hud-ribbon-container.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .hud-ribbon-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .hud-ribbon-header .hud-live-tag {
+      color: var(--accent-blue);
+      font-variant-numeric: tabular-nums;
+    }
+
+    #canvas-hud-pitch {
+      width: 100%;
+      height: 42px;
+      background: #050811;
+      border-radius: 6px;
+      border: 1px solid #1e293b;
+      display: block;
+    }
     /* Modal Styles */
     .modal-overlay {
       position: fixed;
@@ -813,6 +865,14 @@
     </section>
   </div>
 
+  <!-- BOTTOM HUD PITCH RIBBON (Auto-appears when controls are collapsed) -->
+  <div id="hud-ribbon-container">
+    <div class="hud-ribbon-header">
+      <span>Intonation History (&plusmn;50¢)</span>
+      <span id="hud-ribbon-offset" class="hud-live-tag">-- ¢</span>
+    </div>
+    <canvas id="canvas-hud-pitch" width="680" height="42"></canvas>
+  </div>
   <!-- WELCOME / COLLEAGUE SETUP MODAL -->
   <div id="welcome-modal" class="modal-overlay">
     <div class="modal-card" role="dialog" aria-labelledby="modal-title">
@@ -3402,12 +3462,15 @@
           sliderDecay: document.getElementById("slider-decay"),
           valDecay: document.getElementById("val-decay"),
           canvasPitch: document.getElementById("canvas-pitch"),
+          canvasHudPitch: document.getElementById("canvas-hud-pitch"),
+          hudRibbonContainer: document.getElementById("hud-ribbon-container"),
+          hudRibbonOffset: document.getElementById("hud-ribbon-offset"),
           canvasVolume: document.getElementById("canvas-volume")
         };
 
         this.pitchCtx = this.els.canvasPitch.getContext("2d");
         this.volCtx = this.els.canvasVolume.getContext("2d");
-
+        this.hudPitchCtx = this.els.canvasHudPitch.getContext("2d");
         this.populateTargetDropdown();
         this.bindEvents();
         this.updateControlLabels();
@@ -3502,9 +3565,9 @@
         this.els.btnDrawerToggle.addEventListener("click", () => {
           AppState.isDrawerCollapsed = !AppState.isDrawerCollapsed;
           this.els.controlDrawer.classList.toggle("collapsed", AppState.isDrawerCollapsed);
+          this.els.hudRibbonContainer.classList.toggle("visible", AppState.isDrawerCollapsed);
           this.els.btnDrawerToggle.innerHTML = AppState.isDrawerCollapsed ? "Show Controls &blacktriangledown;" : "Hide Controls &blacktriangle;";
         });
-
         this.els.btnFullscreen.addEventListener("click", () => {
           if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
           else document.exitFullscreen().catch(() => {});
@@ -3650,14 +3713,25 @@
           }
         }
 
-        this.drawPitchRibbonCanvas();
+        if (AppState.isDrawerCollapsed) {
+          // Update live offset tag and bottom HUD ribbon
+          const activeOffset = AppState.isNoteMatching ? AppState.targetCentsOff : AppState.detectedCents;
+          const sign = activeOffset > 0 ? "+" : "";
+          const offsetStr = AppState.detectedFreq !== null ? `${sign}${activeOffset} ¢` : "-- ¢";
+          if (this.els.hudRibbonOffset.textContent !== offsetStr) {
+            this.els.hudRibbonOffset.textContent = offsetStr;
+            this.els.hudRibbonOffset.style.color = AppState.isPitchWithinTolerance && AppState.isVolumePassing ? "var(--pass-green)" : (AppState.isNoteMatching ? "var(--warn-amber)" : "var(--fail-red)");
+          }
+          this.drawPitchRibbonCanvas(this.hudPitchCtx, this.els.canvasHudPitch.width, this.els.canvasHudPitch.height);
+          return;
+        }
+
+        this.drawPitchRibbonCanvas(this.pitchCtx, this.els.canvasPitch.width, this.els.canvasPitch.height);
         this.drawVolumeCanvas();
       },
 
       drawPitchRibbonCanvas() {
-        const ctx = this.pitchCtx;
-        const w = this.els.canvasPitch.width;
-        const h = this.els.canvasPitch.height;
+        cdrawPitchRibbonCanvas(ctx = this.pitchCtx, w = this.els.canvasPitch.width, h = this.els.canvasPitch.height) {
         const centerY = h / 2;
 
         ctx.clearRect(0, 0, w, h);
