@@ -167,6 +167,13 @@
       text-align: right;
     }
 
+    .hud-pill-score {
+  min-width: 105px;
+}
+
+#btn-reset-score:hover {
+  color: var(--fail-red) !important;
+}
     .top-actions {
       display: flex;
       align-items: center;
@@ -727,7 +734,11 @@
           </div>
         </div>
       </div>
-
+<div class="hud-pill hud-pill-score" title="Mode Score / Repetitions">
+            <span id="hud-score-label" class="label">Shattered</span>
+            <span id="hud-score-val" class="val" style="color: var(--warn-amber);">0</span>
+            <button id="btn-reset-score" title="Reset score to 0" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.75rem; margin-left: 2px;">&#x27f3;</button>
+          </div>
       <div class="top-actions">
         <button id="btn-help" class="btn btn-secondary" title="How to Play &amp; Setup Guide">? Help</button>
         <button id="btn-fullscreen" class="btn btn-secondary" title="Toggle Projector Fullscreen">Fullscreen &#x26F6;</button>
@@ -960,7 +971,13 @@
       isDrawerCollapsed: false,
       gameMode: "GLASS",     // "GLASS" | "ROCKET" | "MONSTER" | "GLIDER"
       activePreset: null,
-
+      
+scores: {
+        GLASS: 0,
+        ROCKET: 0,
+        MONSTER: 0,
+        GLIDER: 0
+      },
       // Calibration Settings
       targetMidi: 60,
       octaveFree: true,
@@ -3390,6 +3407,9 @@
               AppState.progress = 100;
               AppState.gamePhase = "VICTORY";
               AppState.victoryTimer = AppState.RESET_DELAY;
+              AppState.scores[AppState.gameMode] = (AppState.scores[AppState.gameMode] || 0) + 1;
+              UIController.updateScoreDisplay();
+              SkinManager.onVictory();
               SkinManager.onVictory();
               AudioEngine.playVictorySound(AppState.gameMode);
             }
@@ -3440,6 +3460,9 @@
           hudNote: document.getElementById("hud-note"),
           hudGateDot: document.getElementById("hud-gate-dot"),
           hudProgress: document.getElementById("hud-progress"),
+          hudScoreLabel: document.getElementById("hud-score-label"),
+          hudScoreVal: document.getElementById("hud-score-val"),
+          btnResetScore: document.getElementById("btn-reset-score"),
           readoutNote: document.getElementById("readout-note"),
           readoutHz: document.getElementById("readout-hz"),
           readoutCents: document.getElementById("readout-cents"),
@@ -3561,7 +3584,12 @@
             this.els.presetBtns.forEach(b => b.classList.toggle("active", b === btn));
           });
         });
-
+        
+this.els.btnResetScore.addEventListener("click", (e) => {
+          e.stopPropagation();
+          AppState.scores[AppState.gameMode] = 0;
+          this.updateScoreDisplay();
+        });
         this.els.btnDrawerToggle.addEventListener("click", () => {
           AppState.isDrawerCollapsed = !AppState.isDrawerCollapsed;
           this.els.controlDrawer.classList.toggle("collapsed", AppState.isDrawerCollapsed);
@@ -3640,7 +3668,24 @@
         });
       },
 
-      updateControlLabels() {
+      updateScoreDisplay() {
+        const labels = {
+          GLASS: "Shattered",
+          ROCKET: "Launched",
+          MONSTER: "Banished",
+          GLIDER: "Flights"
+        };
+        const currentScore = AppState.scores[AppState.gameMode] || 0;
+        const currentLabel = labels[AppState.gameMode] || "Score";
+
+        if (this.els.hudScoreLabel.textContent !== currentLabel) {
+          this.els.hudScoreLabel.textContent = currentLabel;
+        }
+        if (this.els.hudScoreVal.textContent !== currentScore.toString()) {
+          this.els.hudScoreVal.textContent = currentScore.toString();
+        }
+      },
+      updateControlLabels(this.updateScoreDisplay();) {
         const targetName = midiToNoteName(AppState.targetMidi);
         const pitchClass = midiToPitchClass(AppState.targetMidi);
         const targetHz = midiToFreq(AppState.targetMidi).toFixed(1);
