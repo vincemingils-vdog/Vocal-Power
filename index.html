@@ -3685,7 +3685,7 @@ this.els.btnResetScore.addEventListener("click", (e) => {
           this.els.hudScoreVal.textContent = currentScore.toString();
         }
       },
-      updateControlLabels(this.updateScoreDisplay();) {
+      updateControlLabels() {
         const targetName = midiToNoteName(AppState.targetMidi);
         const pitchClass = midiToPitchClass(AppState.targetMidi);
         const targetHz = midiToFreq(AppState.targetMidi).toFixed(1);
@@ -3701,6 +3701,8 @@ this.els.btnResetScore.addEventListener("click", (e) => {
         this.els.valVolFloor.textContent = `${AppState.volumeFloor} / 100`;
         this.els.valSustain.textContent = `${AppState.sustainDuration.toFixed(1)} s`;
         this.els.valDecay.textContent = `${AppState.decaySpeed}% / s`;
+
+        this.updateScoreDisplay();
       },
 
       render() {
